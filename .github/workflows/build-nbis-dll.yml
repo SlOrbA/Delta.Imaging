@@ -1,0 +1,159 @@
+name: Build nbis DLL
+
+# Triggers: every push/PR (artifact only), every release (also attaches to release).
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    name: Build nbis32.dll / nbis64.dll
+    runs-on: windows-latest
+
+    steps:
+      # ── Repository checkout ────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── MSYS2 with both MinGW toolchains ──────────────────────────────────
+      # The msys2/setup-msys2 action installs MSYS2 to C:\msys64.
+      # We install both the i686 (32-bit) and x86_64 (64-bit) MinGW compilers
+      # so that we can switch between them per build step using MSYSTEM.
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          update: true
+          install: >-
+            mingw-w64-i686-gcc
+            mingw-w64-x86_64-gcc
+            make
+            git
+
+      # ── Clone NBIS source into two separate trees ──────────────────────────
+      # setup.sh modifies files in the source tree (rules.mak, arch.mak, …),
+      # so 32-bit and 64-bit builds must use separate directories.
+      - name: Clone NBIS source
+        shell: C:\msys64\usr\bin\bash.exe -l -e -o pipefail {0}
+        env:
+          MSYSTEM: MSYS
+        run: |
+          git clone https://github.com/lessandro/nbis /c/nbis-src-32
+          cp -a /c/nbis-src-32 /c/nbis-src-64
+
+      # ── Build 32-bit static libraries ─────────────────────────────────────
+      # MSYSTEM=MINGW32 causes bash login to put /mingw32/bin first in PATH,
+      # making 'gcc' resolve to i686-w64-mingw32-gcc.
+      # --MSYS   : MSYS/MinGW build mode (no X11, no PNG/OpenJP2 implied)
+      # --STDLIBS: explicitly skip PNG and OpenJP2 (WSQ does not need them)
+      # --32     : pass -m32 to the compiler
+      - name: Build NBIS 32-bit static libraries
+        shell: C:\msys64\usr\bin\bash.exe -l -e -o pipefail {0}
+        env:
+          MSYSTEM: MINGW32
+        run: |
+          mkdir -p /c/NBISBuild32
+          cd /c/nbis-src-32
+          ./setup.sh C:/NBISBuild32 --MSYS --STDLIBS --32
+          make config
+          make it
+          make install
+
+      # ── Build 64-bit static libraries ─────────────────────────────────────
+      # MSYSTEM=MINGW64 puts /mingw64/bin first → gcc = x86_64-w64-mingw32-gcc
+      - name: Build NBIS 64-bit static libraries
+        shell: C:\msys64\usr\bin\bash.exe -l -e -o pipefail {0}
+        env:
+          MSYSTEM: MINGW64
+        run: |
+          mkdir -p /c/NBISBuild64
+          cd /c/nbis-src-64
+          ./setup.sh C:/NBISBuild64 --MSYS --STDLIBS --64
+          make config
+          make it
+          make install
+
+      # ── Copy .a files into the project ────────────────────────────────────
+      # INSTALL_ROOT_LIB_DIR in rules_msys.mak.src is $(FINAL_INSTALLATION_DIR)/lib,
+      # so 'make install' puts the .a files at C:\NBISBuild{32,64}\lib\.
+      - name: Copy static libraries into project
+        shell: pwsh
+        run: |
+          Write-Host "32-bit libraries:"
+          Get-ChildItem C:\NBISBuild32\lib\*.a | Select-Object -ExpandProperty Name
+          Write-Host "64-bit libraries:"
+          Get-ChildItem C:\NBISBuild64\lib\*.a | Select-Object -ExpandProperty Name
+
+          Copy-Item C:\NBISBuild32\lib\*.a Delta.Wsq\nbis\lib32\ -Force
+          Copy-Item C:\NBISBuild64\lib\*.a Delta.Wsq\nbis\lib64\ -Force
+
+      # ── Build the DLL with MSVC ────────────────────────────────────────────
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build nbis32.dll  (Release | Win32)
+        run: |
+          msbuild Delta.Wsq\nbis\nbis.vcxproj `
+            /p:Configuration=Release `
+            /p:Platform=Win32 `
+            /m
+
+      - name: Build nbis64.dll  (Release | x64)
+        run: |
+          msbuild Delta.Wsq\nbis\nbis.vcxproj `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /m
+
+      # ── Verify: no legacy MSVC CRT dependency ─────────────────────────────
+      # If msvcr*.dll appears in the dependency list the build is broken.
+      # vcruntime140.dll / ucrtbase.dll are also flagged because the goal is
+      # a fully standalone DLL (compiled with /MT static CRT).
+      - name: Verify DLL dependencies
+        shell: pwsh
+        run: |
+          $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath  = & $vsWhere -latest -property installationPath
+          $dumpbin = Get-ChildItem "$vsPath\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe |
+                       Where-Object { $_.FullName -match "Hostx64\\x64" } |
+                       Select-Object -First 1 -ExpandProperty FullName
+
+          $failed = $false
+          foreach ($dll in @(
+            "Delta.Wsq\nbis\bin\Release\Win32\nbis32.dll",
+            "Delta.Wsq\nbis\bin\Release\x64\nbis64.dll"
+          )) {
+            Write-Host "`n=== $dll ==="
+            $output = & $dumpbin /dependents $dll
+            $output | Write-Host
+
+            # Flag any MSVC runtime that requires redistribution
+            $bad = $output | Where-Object { $_ -match "msvcr\d+\.dll|vcruntime\d+\.dll|msvcp\d+\.dll" }
+            if ($bad) {
+              Write-Warning "$dll has unexpected runtime dependencies:`n$bad"
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
+
+      # ── Upload build artifacts ─────────────────────────────────────────────
+      - name: Upload DLL artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nbis-dll
+          path: |
+            Delta.Wsq\nbis\bin\Release\Win32\nbis32.dll
+            Delta.Wsq\nbis\bin\Release\x64\nbis64.dll
+
+      # ── Attach DLLs to the GitHub Release (only on release events) ─────────
+      - name: Attach DLLs to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            Delta.Wsq\nbis\bin\Release\Win32\nbis32.dll
+            Delta.Wsq\nbis\bin\Release\x64\nbis64.dll
