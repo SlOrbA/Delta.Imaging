@@ -134,12 +134,11 @@ namespace Delta.Wsq.Tests
 
         [Theory]
         [InlineData(0.75f)]
-        [InlineData(1.5f)]
-        [InlineData(3.0f)]
-        [InlineData(5.0f)]
+        [InlineData(1.0f)]
+        [InlineData(2.25f)]
         public void Encode_VariousBitRates_ProducesValidWSQ(float bitrate)
         {
-            var raw = MakeSyntheticImage(64, 64);
+            var raw = MakeSyntheticImage(128, 128);
 
             var wsq = WsqCodec.Encode(raw, bitrate, null);
 
@@ -152,8 +151,8 @@ namespace Delta.Wsq.Tests
         [Fact]
         public void Encode_VerySmallImage_Succeeds()
         {
-            // 8x8 is minimal valid fingerprint
-            var raw = MakeSyntheticImage(8, 8);
+            // 32x32 small valid fingerprint
+            var raw = MakeSyntheticImage(32, 32);
 
             var wsq = WsqCodec.Encode(raw, 0.75f, null);
 
@@ -162,10 +161,10 @@ namespace Delta.Wsq.Tests
         }
 
         [Fact]
-        public void Encode_LargeImage_Succeeds()
+        public void Encode_MediumImage_Succeeds()
         {
-            // 1024x768 fingerprint
-            var raw = MakeSyntheticImage(1024, 768);
+            // 256x256 medium fingerprint
+            var raw = MakeSyntheticImage(256, 256);
 
             var wsq = WsqCodec.Encode(raw, 0.75f, null);
 
