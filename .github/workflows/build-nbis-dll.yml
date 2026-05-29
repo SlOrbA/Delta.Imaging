@@ -22,14 +22,15 @@ jobs:
         uses: actions/checkout@v4
 
       # ── MSYS2 with both MinGW toolchains ──────────────────────────────────
-      # The msys2/setup-msys2 action installs MSYS2 to C:\msys64.
-      # We install both the i686 (32-bit) and x86_64 (64-bit) MinGW compilers
-      # so that we can switch between them per build step using MSYSTEM.
+      # The msys2/setup-msys2 action installs MSYS2 to C:\msys64 and registers
+      # the `msys2` shell command used in later steps.
+      # cache: true reuses the package cache across runs (saves ~1 min).
       - name: Set up MSYS2
         uses: msys2/setup-msys2@v2
         with:
           msystem: MSYS
           update: true
+          cache: true
           install: >-
             mingw-w64-i686-gcc
             mingw-w64-x86_64-gcc
@@ -47,13 +48,11 @@ jobs:
           Copy-Item -Recurse -Force C:\nbis-src-32 C:\nbis-src-64
 
       # ── Build 32-bit static libraries ─────────────────────────────────────
-      # MSYSTEM=MINGW32 causes bash login to put /mingw32/bin first in PATH,
-      # making 'gcc' resolve to i686-w64-mingw32-gcc.
-      # --MSYS   : MSYS/MinGW build mode (no X11, no PNG/OpenJP2 implied)
-      # --STDLIBS: explicitly skip PNG and OpenJP2 (WSQ does not need them)
-      # --32     : pass -m32 to the compiler
+      # shell: msys2 {0} uses the shell registered by setup-msys2.
+      # Setting MSYSTEM=MINGW32 in env causes the login shell to put
+      # /mingw32/bin first in PATH, making gcc = i686-w64-mingw32-gcc.
       - name: Build NBIS 32-bit static libraries
-        shell: C:\msys64\usr\bin\bash.exe -l -e -o pipefail {0}
+        shell: msys2 {0}
         env:
           MSYSTEM: MINGW32
         run: |
@@ -67,7 +66,7 @@ jobs:
       # ── Build 64-bit static libraries ─────────────────────────────────────
       # MSYSTEM=MINGW64 puts /mingw64/bin first → gcc = x86_64-w64-mingw32-gcc
       - name: Build NBIS 64-bit static libraries
-        shell: C:\msys64\usr\bin\bash.exe -l -e -o pipefail {0}
+        shell: msys2 {0}
         env:
           MSYSTEM: MINGW64
         run: |

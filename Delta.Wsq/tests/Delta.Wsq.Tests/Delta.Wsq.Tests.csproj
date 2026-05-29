@@ -22,14 +22,15 @@
   </ItemGroup>
 
   <!-- Native DLLs: copied from the dependencies folder at build time.
-       The build-nbis-dll workflow populates this folder before running tests. -->
+       The build-nbis-dll workflow populates this folder before running tests.
+       Path: 2 levels up from this .csproj → Delta.Wsq/dependencies/ -->
   <ItemGroup>
-    <Content Include="..\..\..\dependencies\nbis32.dll"
-             Condition="Exists('..\..\..\dependencies\nbis32.dll')">
+    <Content Include="..\..\dependencies\nbis32.dll"
+             Condition="Exists('..\..\dependencies\nbis32.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\..\..\dependencies\nbis64.dll"
-             Condition="Exists('..\..\..\dependencies\nbis64.dll')">
+    <Content Include="..\..\dependencies\nbis64.dll"
+             Condition="Exists('..\..\dependencies\nbis64.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

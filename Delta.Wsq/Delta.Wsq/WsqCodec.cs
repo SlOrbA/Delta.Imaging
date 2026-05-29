@@ -45,7 +45,7 @@ namespace Delta.Wsq
                     NativeMethods.free_mem(outputDataPtr);
             }
 
-            return null;
+            return Array.Empty<byte>();
         }
 
         public static unsafe string[] GetComments(byte[] data)
