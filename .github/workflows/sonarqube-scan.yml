@@ -76,8 +76,9 @@ jobs:
             /o:"lari-korpi-personal" `
             /d:sonar.host.url="${{ env.SONARQUBE_HOST_URL }}" `
             /d:sonar.token="${env:SONAR_TOKEN}" `
-            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.xaml.cs" `
-            /d:sonar.coverage.exclusions="**/Tests/**,**/TestApplication/**" `
+            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.xaml.cs,**/packages/**,**/node_modules/**" `
+            /d:sonar.coverage.exclusions="**/Tests/**,**/TestApplication/**,**/packages/**" `
+            /d:sonar.cs.opencover.reportPaths="**/coverage.opencover.xml" `
             /d:sonar.cs.vstest.reportsPaths="**/test-results.trx"
 
       # Build and collect code coverage
