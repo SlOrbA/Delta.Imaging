@@ -1,10 +1,12 @@
 name: Build nbis DLL
 
 # Triggers: every push/PR (artifact only), every release (also attaches to release).
+# workflow_call allows other workflows (e.g. test.yml) to reuse this build job.
 on:
   push:
     branches: ["**"]
   pull_request:
+  workflow_call:
   workflow_dispatch:
   release:
     types: [created]

@@ -17,6 +17,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "nbis", "nbis\nbis.vcxproj",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestApplication", "tests\TestApplication\TestApplication.csproj", "{B9AD33CF-5C93-4177-9985-A36D70A08747}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Delta.Wsq.Tests", "tests\Delta.Wsq.Tests\Delta.Wsq.Tests.csproj", "{7BECBF96-BF4B-4490-BFCC-703845C941A9}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PdnWsq", "PdnWsq\PdnWsq.csproj", "{25F191DC-B6F5-4C2B-AFB0-874ED67B41DA}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{0C459D7F-4565-4F7F-B3E3-565449E000C7}"
@@ -57,6 +59,14 @@ Global
 		{B9AD33CF-5C93-4177-9985-A36D70A08747}.Release|Win32.Build.0 = Release|x86
 		{B9AD33CF-5C93-4177-9985-A36D70A08747}.Release|x64.ActiveCfg = Release|x64
 		{B9AD33CF-5C93-4177-9985-A36D70A08747}.Release|x64.Build.0 = Release|x64
+		{7BECBF96-BF4B-4490-BFCC-703845C941A9}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{7BECBF96-BF4B-4490-BFCC-703845C941A9}.Debug|Win32.Build.0 = Debug|Any CPU
+		{7BECBF96-BF4B-4490-BFCC-703845C941A9}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7BECBF96-BF4B-4490-BFCC-703845C941A9}.Debug|x64.Build.0 = Debug|Any CPU
+		{7BECBF96-BF4B-4490-BFCC-703845C941A9}.Release|Win32.ActiveCfg = Release|Any CPU
+		{7BECBF96-BF4B-4490-BFCC-703845C941A9}.Release|Win32.Build.0 = Release|Any CPU
+		{7BECBF96-BF4B-4490-BFCC-703845C941A9}.Release|x64.ActiveCfg = Release|Any CPU
+		{7BECBF96-BF4B-4490-BFCC-703845C941A9}.Release|x64.Build.0 = Release|Any CPU
 		{25F191DC-B6F5-4C2B-AFB0-874ED67B41DA}.Debug|Win32.ActiveCfg = Debug|Any CPU
 		{25F191DC-B6F5-4C2B-AFB0-874ED67B41DA}.Debug|Win32.Build.0 = Debug|Any CPU
 		{25F191DC-B6F5-4C2B-AFB0-874ED67B41DA}.Debug|x64.ActiveCfg = Debug|Any CPU
