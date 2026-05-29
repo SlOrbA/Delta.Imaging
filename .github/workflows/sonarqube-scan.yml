@@ -56,13 +56,39 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      # Build and collect code coverage
       - name: Restore packages
         run: |
           dotnet restore Delta.Wsq/Delta.Wsq/Delta.Wsq.csproj
           dotnet restore Delta.Wsq/tests/Delta.Wsq.Tests/Delta.Wsq.Tests.csproj
 
-      - name: Build
+      # Install SonarQube Scanner
+      - name: Install SonarQube Scanner
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      # SonarQube analysis workflow:
+      # 1. Begin analysis
+      # 2. Build projects
+      # 3. Run tests with coverage
+      # 4. End analysis (sends results to SonarCloud)
+      - name: Begin SonarQube analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        shell: powershell
+        run: |
+          dotnet sonarscanner begin `
+            /k:"SlOrbA_Delta.Imaging" `
+            /o:"lari-korpi-personal" `
+            /d:sonar.host.url=${{ env.SONARQUBE_HOST_URL }} `
+            /d:sonar.login="${env:SONAR_TOKEN}" `
+            /d:sonar.github.oauth="${env:GITHUB_TOKEN}" `
+            /d:sonar.sources=Delta.Wsq/Delta.Wsq,Delta.Wsq/tests `
+            /d:sonar.test.inclusions=**/*Tests.cs `
+            /d:sonar.exclusions=**/bin/**,**/obj/**,**/*.xaml.cs `
+            /d:sonar.coverage.exclusions=**/Tests/**,**/TestApplication/** `
+            /d:sonar.cs.opencover.reportPaths="**/coverage.opencover.xml"
+
+      - name: Build projects
         run: |
           dotnet build Delta.Wsq/Delta.Wsq/Delta.Wsq.csproj --configuration Release --no-restore
           dotnet build Delta.Wsq/tests/Delta.Wsq.Tests/Delta.Wsq.Tests.csproj --configuration Release --no-restore
@@ -77,46 +103,12 @@ jobs:
             --logger "trx;LogFileName=test-results.trx" `
             --logger "console;verbosity=normal"
 
-      # SonarQube scan
-      - name: SonarQube Scan
-        uses: sonarsource/sonarcloud-github-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          # SonarCloud organization and project keys
-          args: >
-            -Dsonar.organization=lari-korpi-personal
-            -Dsonar.projectKey=SlOrbA_Delta.Imaging
-            -Dsonar.host.url=${{ env.SONARQUBE_HOST_URL }}
-            -Dsonar.sources=Delta.Wsq/Delta.Wsq,Delta.Wsq/tests
-            -Dsonar.test.inclusions=**/*Tests.cs
-            -Dsonar.exclusions=**/bin/**,**/obj/**,**/*.xaml.cs
-            -Dsonar.coverage.exclusions=**/Tests/**,**/TestApplication/**
-
-      # Check Quality Gate
-      - name: Check SonarQube Quality Gate
-        id: quality-gate
-        uses: sonarsource/sonarqube-quality-gate-action@master
-        timeout-minutes: 5
+      - name: End SonarQube analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        continue-on-error: true
+        shell: powershell
+        run: dotnet sonarscanner end /d:sonar.login="${env:SONAR_TOKEN}"
 
-      # Report Quality Gate result
-      - name: Report Quality Gate Status
-        run: |
-          if [ "${{ steps.quality-gate.outcome }}" == "failure" ]; then
-            echo "::warning::SonarQube Quality Gate failed. See https://sonarcloud.io/dashboard?id=SlOrbA_Delta.Imaging for details."
-          else
-            echo "✓ SonarQube Quality Gate passed"
-          fi
+      # SonarQube reports will be pushed automatically to SonarCloud
+      # No need to upload artifacts as the scanner sends results directly
 
-      # Publish results
-      - name: Upload SonarQube analysis to artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: sonarqube-report
-          path: .scannerwork/
-          retention-days: 30
