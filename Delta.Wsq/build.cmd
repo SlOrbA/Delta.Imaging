@@ -1,6 +1,6 @@
 @echo off
 
-C:\Windows\Microsoft.NET\Framework\v4.0.30319\msbuild.exe /t:build /p:Configuration=Debug /p:Platform=Win32
+dotnet build Delta.Wsq.sln --configuration Debug --arch x86
 if %ERRORLEVEL% equ 0 (	
 	echo ***************** Debug/x86 Build succeeded ***************** 
 ) else (
@@ -9,7 +9,7 @@ if %ERRORLEVEL% equ 0 (
 	pause
 )
 
-C:\Windows\Microsoft.NET\Framework\v4.0.30319\msbuild.exe /t:build /p:Configuration=Release /p:Platform=Win32
+dotnet build Delta.Wsq.sln --configuration Release --arch x86
 if %ERRORLEVEL% equ 0 (	
 	echo ***************** Release/x86 Build succeeded ***************** 
 ) else (
@@ -18,7 +18,7 @@ if %ERRORLEVEL% equ 0 (
 	pause
 )
 
-C:\Windows\Microsoft.NET\Framework\v4.0.30319\msbuild.exe /t:build /p:Configuration=Debug /p:Platform=x64
+dotnet build Delta.Wsq.sln --configuration Debug --arch x64
 if %ERRORLEVEL% equ 0 (	
 	echo ***************** Debug/x64 Build succeeded ***************** 
 ) else (
@@ -27,7 +27,7 @@ if %ERRORLEVEL% equ 0 (
 	pause
 )
 
-C:\Windows\Microsoft.NET\Framework\v4.0.30319\msbuild.exe /t:build /p:Configuration=Release /p:Platform=x64
+dotnet build Delta.Wsq.sln --configuration Release --arch x64
 if %ERRORLEVEL% equ 0 (	
 	echo ***************** Release/x64 Build succeeded ***************** 
 ) else (

@@ -1,6 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2012
+# Visual Studio Version 19
+VisualStudioVersion = 19.0.30703.0
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestExif", "TestExif\TestExif.csproj", "{02F22583-B2D1-4262-A91B-A4785503C914}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Delta.ImageRenameTool", "Delta.ImageRenameTool\Delta.ImageRenameTool.csproj", "{459A0BA9-9DCB-4810-958D-42718F56EFF8}"

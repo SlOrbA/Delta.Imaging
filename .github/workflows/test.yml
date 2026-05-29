@@ -1,0 +1,66 @@
+name: Test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # ── Build the native DLL first (reuses the existing workflow) ──────────────
+  build-dll:
+    name: Build nbis DLL
+    uses: ./.github/workflows/build-nbis-dll.yml
+
+  # ── Run xUnit tests ────────────────────────────────────────────────────────
+  test:
+    name: Run tests
+    needs: build-dll
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Download the DLL artifact produced by the build-dll job.
+      # The DLLs are placed into dependencies/ so the test project's
+      # <Content> items copy them next to the test assembly at build time.
+      - name: Download nbis DLL artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nbis-dll
+          path: Delta.Wsq/dependencies/
+
+      - name: Show downloaded DLLs
+        shell: pwsh
+        run: Get-ChildItem Delta.Wsq\dependencies\*.dll | Select-Object Name
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore Delta.Wsq/tests/Delta.Wsq.Tests/Delta.Wsq.Tests.csproj
+
+      - name: Build test project
+        run: |
+          dotnet build Delta.Wsq/tests/Delta.Wsq.Tests/Delta.Wsq.Tests.csproj `
+            --configuration Release `
+            --no-restore
+
+      - name: Run tests
+        run: |
+          dotnet test Delta.Wsq/tests/Delta.Wsq.Tests/Delta.Wsq.Tests.csproj `
+            --configuration Release `
+            --no-build `
+            --logger "trx;LogFileName=test-results.trx" `
+            --logger "console;verbosity=normal"
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: xUnit Tests
+          path: "**/*.trx"
+          reporter: dotnet-trx
