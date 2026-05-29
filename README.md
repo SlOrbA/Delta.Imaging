@@ -3,6 +3,8 @@ Delta.Imaging
 
 [![Build nbis DLL](https://github.com/SlOrbA/Delta.Imaging/actions/workflows/build-nbis-dll.yml/badge.svg)](https://github.com/SlOrbA/Delta.Imaging/actions/workflows/build-nbis-dll.yml)
 [![Test](https://github.com/SlOrbA/Delta.Imaging/actions/workflows/test.yml/badge.svg)](https://github.com/SlOrbA/Delta.Imaging/actions/workflows/test.yml)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=SlOrbA_Delta.Imaging&metric=alert_status)](https://sonarcloud.io/dashboard?id=SlOrbA_Delta.Imaging)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=SlOrbA_Delta.Imaging&metric=coverage)](https://sonarcloud.io/dashboard?id=SlOrbA_Delta.Imaging)
 
 Imaging libraries and tools, all sharing the [Ms-RL][msrl] license.
   
