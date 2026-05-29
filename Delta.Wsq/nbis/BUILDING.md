@@ -85,6 +85,8 @@ Open an **MSYS2 MinGW32** shell (`mingw32.exe`) and run:
 git clone https://github.com/lessandro/nbis
 cd nbis
 ./setup.sh C:/NBISBuild32 --MSYS --STDLIBS --32
+# GCC >= 10 defaults to -fno-common; NBIS defines globals in headers so we must add -fcommon:
+sed -i 's/^\(CFLAGS.*:=\)/\1 -fcommon/' rules.mak
 make config
 make it
 ```
@@ -98,6 +100,7 @@ Open an **MSYS2 MinGW64** shell (`mingw64.exe`) and run:
 ```bash
 cd nbis   # same clone as above
 ./setup.sh C:/NBISBuild64 --MSYS --STDLIBS --64
+sed -i 's/^\(CFLAGS.*:=\)/\1 -fcommon/' rules.mak
 make config
 make it
 ```

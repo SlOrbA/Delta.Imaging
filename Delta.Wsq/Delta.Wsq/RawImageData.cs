@@ -3,7 +3,7 @@ namespace Delta.Wsq
 {
     public class RawImageData
     {
-        public static RawImageData Empty = new RawImageData()
+        public static readonly RawImageData Empty = new RawImageData()
         {
             Data = new byte[0],
             Width = 0,
