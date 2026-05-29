@@ -5,17 +5,43 @@ Delta.Imaging
 [![Test](https://github.com/SlOrbA/Delta.Imaging/actions/workflows/test.yml/badge.svg)](https://github.com/SlOrbA/Delta.Imaging/actions/workflows/test.yml)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=SlOrbA_Delta.Imaging&metric=alert_status)](https://sonarcloud.io/dashboard?id=SlOrbA_Delta.Imaging)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=SlOrbA_Delta.Imaging&metric=coverage)](https://sonarcloud.io/dashboard?id=SlOrbA_Delta.Imaging)
+[![Latest Release](https://img.shields.io/github/v/release/SlOrbA/Delta.Imaging?color=blue&label=Latest%20Release)](https://github.com/SlOrbA/Delta.Imaging/releases)
+[![License: Ms-RL](https://img.shields.io/badge/License-Ms--RL-blue.svg)](License.md)
 
 Imaging libraries and tools, all sharing the [Ms-RL][msrl] license.
   
-* **Delta.Wsq**: .NET WSQ (Image format primarily used to store fingerprints) encoder/decoder based on the [NBIS implementation](https://github.com/lessandro/nbis) by NIST. Provides also a [Paint.NET](http://www.getpaint.net/) plugin.
+* **Delta.Wsq**: .NET WSQ (Image format primarily used to store fingerprints) encoder/decoder based on the [NIST NBIS implementation](https://github.com/lessandro/nbis). Provides also a [Paint.NET](http://www.getpaint.net/) plugin. ✅ No Redistributable dependency (static CRT)
 * **Delta.ImageRenameTool**: A simple GUI allowing to rename multiple images at one time.
 
-## Using Delta.Wsq
+## Quick Start
+
+### Using Delta.Wsq
 
 The library requires `nbis32.dll` (32-bit) and `nbis64.dll` (64-bit) in the application directory. Download the latest pre-built DLLs from the [Releases](https://github.com/SlOrbA/Delta.Imaging/releases) page.
 
-The DLLs have **no redistributable dependency** — only `KERNEL32.dll` and `msvcrt.dll` (built-in Windows system components).
+**DLL Features:**
+- ✅ **No Redistributable dependency** — Built with static CRT (`/MT`)
+- ✅ **KERNEL32.dll and msvcrt.dll only** — Built-in Windows components
+- ✅ **Modern toolchain** — MSVC 2022, MinGW-w64 GCC 14+
+- ✅ **Automated builds** — GitHub Actions builds on every release
+
+### API Usage Example
+
+```csharp
+using Delta.Wsq;
+
+// Load WSQ image from file
+byte[] wsqData = File.ReadAllBytes("fingerprint.wsq");
+var image = WsqCodec.Decode(wsqData);
+
+// Or encode an existing image
+var encoded = WsqCodec.Encode(image, bitrate: 0.75f, comment: "Test");
+
+// Extract metadata
+var comments = WsqCodec.GetComments(wsqData);
+foreach (var comment in comments)
+    Console.WriteLine(comment);
+```
 
 ## Building
 
