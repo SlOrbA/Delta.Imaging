@@ -59,11 +59,11 @@ jobs:
           mkdir -p /c/NBISBuild32
           cd /c/nbis-src-32
           ./setup.sh C:/NBISBuild32 --MSYS --STDLIBS --32
+          make config
           # GCC >= 10 defaults to -fno-common; NBIS defines globals in header
           # files, which causes "multiple definition" linker errors. Patch all
-          # per-package Makefile.config files created by setup.sh.
+          # per-package Makefile.config files AFTER make config generates them.
           find . -name "Makefile.config" -exec sed -i 's/^CFLAGS = /CFLAGS = -fcommon /' {} \;
-          make config
           make it
           make install
 
@@ -77,9 +77,9 @@ jobs:
           mkdir -p /c/NBISBuild64
           cd /c/nbis-src-64
           ./setup.sh C:/NBISBuild64 --MSYS --STDLIBS --64
+          make config
           # Same -fcommon fix as 32-bit build above.
           find . -name "Makefile.config" -exec sed -i 's/^CFLAGS = /CFLAGS = -fcommon /' {} \;
-          make config
           make it
           make install
 
