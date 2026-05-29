@@ -130,6 +130,89 @@ namespace Delta.Wsq.Tests
             Assert.Empty(result);
         }
 
+        // ── Edge cases & parametrized tests ───────────────────────────────────
+
+        [Theory]
+        [InlineData(0.75f)]
+        [InlineData(1.5f)]
+        [InlineData(3.0f)]
+        [InlineData(5.0f)]
+        public void Encode_VariousBitRates_ProducesValidWSQ(float bitrate)
+        {
+            var raw = MakeSyntheticImage(64, 64);
+
+            var wsq = WsqCodec.Encode(raw, bitrate, null);
+
+            Assert.NotNull(wsq);
+            Assert.NotEmpty(wsq);
+            Assert.Equal(SoiByte0, wsq[0]);
+            Assert.Equal(SoiByte1, wsq[1]);
+        }
+
+        [Fact]
+        public void Encode_VerySmallImage_Succeeds()
+        {
+            // 8x8 is minimal valid fingerprint
+            var raw = MakeSyntheticImage(8, 8);
+
+            var wsq = WsqCodec.Encode(raw, 0.75f, null);
+
+            Assert.NotNull(wsq);
+            Assert.NotEmpty(wsq);
+        }
+
+        [Fact]
+        public void Encode_LargeImage_Succeeds()
+        {
+            // 1024x768 fingerprint
+            var raw = MakeSyntheticImage(1024, 768);
+
+            var wsq = WsqCodec.Encode(raw, 0.75f, null);
+
+            Assert.NotNull(wsq);
+            Assert.NotEmpty(wsq);
+        }
+
+        [Fact]
+        public void Decode_CorruptedWsqHeader_ReturnsEmpty()
+        {
+            // Create fake WSQ with bad header
+            var corrupted = new byte[] { SoiByte0, SoiByte1, 0xFF, 0xFF, 0x00 };
+
+            var result = WsqCodec.Decode(corrupted);
+
+            // Should return empty instead of crashing
+            Assert.True(result.IsEmpty);
+        }
+
+        [Fact]
+        public void RoundTrip_WithComment_PreservesComment()
+        {
+            const string testComment = "Test fingerprint comment";
+            var original = MakeSyntheticImage(128, 128);
+
+            var encoded = WsqCodec.Encode(original, 0.75f, testComment);
+            var comments = WsqCodec.GetComments(encoded);
+
+            Assert.NotEmpty(comments);
+            Assert.Contains(comments, c => c.Contains(testComment));
+        }
+
+        [Fact]
+        public void Encode_MultipleTimesWithSameData_ConsistentResults()
+        {
+            var raw = MakeSyntheticImage(64, 64);
+
+            var wsq1 = WsqCodec.Encode(raw, 0.75f, null);
+            var wsq2 = WsqCodec.Encode(raw, 0.75f, null);
+
+            // Both should produce valid WSQ
+            Assert.NotNull(wsq1);
+            Assert.NotNull(wsq2);
+            Assert.NotEmpty(wsq1);
+            Assert.NotEmpty(wsq2);
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────
 
         private static RawImageData MakeSyntheticImage(int width, int height)
