@@ -60,6 +60,9 @@ jobs:
           cd /c/nbis-src-32
           ./setup.sh C:/NBISBuild32 --MSYS --STDLIBS --32
           make config
+          # GCC >= 10 defaults to -fno-common; NBIS defines globals in headers
+          # so we must opt back in to -fcommon to avoid "multiple definition" errors.
+          sed -i 's/^CFLAGS = /CFLAGS = -fcommon /' Makefile.config
           make it
           make install
 
@@ -74,6 +77,8 @@ jobs:
           cd /c/nbis-src-64
           ./setup.sh C:/NBISBuild64 --MSYS --STDLIBS --64
           make config
+          # Same -fcommon fix as 32-bit build above.
+          sed -i 's/^CFLAGS = /CFLAGS = -fcommon /' Makefile.config
           make it
           make install
 
