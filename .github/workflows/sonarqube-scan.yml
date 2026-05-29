@@ -12,17 +12,44 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  build-dll:
+    name: Build nbis DLL
+    uses: ./.github/workflows/build-nbis-dll.yml
+
   sonarqube:
     name: SonarQube Code Analysis
     runs-on: windows-latest
+    needs: build-dll
     # Run on windows-latest because project targets net8.0-windows
     # (Windows Desktop Framework required for tests)
+    # Depends on build-dll for NBIS DLLs
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Full history for better analysis
+
+      # Download the DLL artifact produced by the build-dll job.
+      # The DLLs are placed into dependencies/ so the test project's
+      # <Content> items copy them next to the test assembly at build time.
+      - name: Download nbis DLL artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nbis-dll
+          path: Delta.Wsq/dependencies/
+
+      # Flatten the directory structure: Win32/nbis32.dll → nbis32.dll
+      - name: Flatten DLL structure
+        shell: pwsh
+        run: |
+          Move-Item -Path Delta.Wsq/dependencies/Win32/nbis32.dll -Destination Delta.Wsq/dependencies/nbis32.dll -Force
+          Move-Item -Path Delta.Wsq/dependencies/x64/nbis64.dll -Destination Delta.Wsq/dependencies/nbis64.dll -Force
+          Remove-Item -Path Delta.Wsq/dependencies/Win32, Delta.Wsq/dependencies/x64 -Recurse -Force
+
+      - name: Show downloaded DLLs
+        shell: pwsh
+        run: Get-ChildItem Delta.Wsq\dependencies\*.dll | Select-Object Name
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
