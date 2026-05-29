@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include <stdio.h>
+#include <stdarg.h>
 
 extern "C" {
 	int debug = 1;
@@ -9,6 +10,10 @@ extern "C" {
 	int __cdecl __mingw_vsnprintf(char* dest, size_t count, const char* format, va_list arglist);
 	int __cdecl __mingw_vsprintf(char* dest, const char* format, va_list arglist);
 	int __cdecl __mingw_vsscanf(const char* source, const char* format, va_list arglist);
+	// Non-variadic wrappers (used by modern MinGW-w64 GCC >= 14)
+	int __cdecl __mingw_fprintf(FILE* fileptr, const char* format, ...);
+	int __cdecl __mingw_sprintf(char* dest, const char* format, ...);
+	int __cdecl __mingw_sscanf(const char* source, const char* format, ...);
 }
 
 int __cdecl __mingw_vfprintf(FILE* fileptr, const char* format, va_list arglist)
@@ -66,4 +71,36 @@ int __cdecl __mingw_vsprintf(char* dest, const char* format, va_list arglist)
 int __cdecl __mingw_vsscanf(const char* source, const char* format, va_list arglist)
 {
 	return hacked_vsscanf(source, format, arglist);
+}
+
+// ── Non-variadic wrappers (modern MinGW-w64 GCC >= 14) ───────────────────────
+// These call va_start/va_end and delegate to the v* versions above.
+
+int __cdecl __mingw_fprintf(FILE* fileptr, const char* format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	int result = vfprintf_s(fileptr, format, args);
+	va_end(args);
+	return result;
+}
+
+int __cdecl __mingw_sprintf(char* dest, const char* format, ...)
+{
+	va_list args;
+	va_start(args, format);
+#pragma warning(disable: 4996)
+	int result = vsprintf(dest, format, args);
+#pragma warning(default: 4996)
+	va_end(args);
+	return result;
+}
+
+int __cdecl __mingw_sscanf(const char* source, const char* format, ...)
+{
+	va_list args;
+	va_start(args, format);
+	int result = hacked_vsscanf(source, format, args);
+	va_end(args);
+	return result;
 }
