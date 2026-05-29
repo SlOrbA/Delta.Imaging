@@ -31,6 +31,14 @@ jobs:
           name: nbis-dll
           path: Delta.Wsq/dependencies/
 
+      # Flatten the directory structure: Win32/nbis32.dll → nbis32.dll
+      - name: Flatten DLL structure
+        shell: pwsh
+        run: |
+          Move-Item -Path Delta.Wsq/dependencies/Win32/nbis32.dll -Destination Delta.Wsq/dependencies/nbis32.dll -Force
+          Move-Item -Path Delta.Wsq/dependencies/x64/nbis64.dll -Destination Delta.Wsq/dependencies/nbis64.dll -Force
+          Remove-Item -Path Delta.Wsq/dependencies/Win32, Delta.Wsq/dependencies/x64 -Recurse -Force
+
       - name: Show downloaded DLLs
         shell: pwsh
         run: Get-ChildItem Delta.Wsq\dependencies\*.dll | Select-Object Name
