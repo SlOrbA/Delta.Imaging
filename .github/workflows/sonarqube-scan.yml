@@ -32,10 +32,14 @@ jobs:
 
       # Build and collect code coverage
       - name: Restore packages
-        run: dotnet restore Delta.Wsq/Delta.Wsq/Delta.Wsq.csproj Delta.Wsq/tests/Delta.Wsq.Tests/Delta.Wsq.Tests.csproj
+        run: |
+          dotnet restore Delta.Wsq/Delta.Wsq/Delta.Wsq.csproj
+          dotnet restore Delta.Wsq/tests/Delta.Wsq.Tests/Delta.Wsq.Tests.csproj
 
       - name: Build
-        run: dotnet build Delta.Wsq/Delta.Wsq/Delta.Wsq.csproj Delta.Wsq/tests/Delta.Wsq.Tests/Delta.Wsq.Tests.csproj --configuration Release --no-restore
+        run: |
+          dotnet build Delta.Wsq/Delta.Wsq/Delta.Wsq.csproj --configuration Release --no-restore
+          dotnet build Delta.Wsq/tests/Delta.Wsq.Tests/Delta.Wsq.Tests.csproj --configuration Release --no-restore
 
       # Run tests with code coverage (Coverlet OpenCover format)
       - name: Run tests with coverage
