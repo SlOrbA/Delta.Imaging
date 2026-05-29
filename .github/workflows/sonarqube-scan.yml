@@ -56,6 +56,30 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "zulu"
+          java-version: "17"
+
+      - name: Install SonarScanner for .NET
+        shell: pwsh
+        run: dotnet tool update --global dotnet-sonarscanner
+
+      - name: Begin SonarQube analysis
+        shell: pwsh
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          dotnet sonarscanner begin `
+            /k:"SlOrbA_Delta.Imaging" `
+            /o:"lari-korpi-personal" `
+            /d:sonar.host.url="${{ env.SONARQUBE_HOST_URL }}" `
+            /d:sonar.token="${env:SONAR_TOKEN}" `
+            /d:sonar.exclusions="**/bin/**,**/obj/**,**/*.xaml.cs" `
+            /d:sonar.coverage.exclusions="**/Tests/**,**/TestApplication/**" `
+            /d:sonar.cs.vstest.reportsPaths="**/test-results.trx"
+
       # Build and collect code coverage
       - name: Restore packages
         run: |
@@ -77,40 +101,12 @@ jobs:
             --logger "trx;LogFileName=test-results.trx" `
             --logger "console;verbosity=normal"
 
-      # SonarQube scan
-      - name: SonarQube Scan
-        uses: sonarsource/sonarcloud-github-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          # SonarCloud organization and project keys
-          args: >
-            -Dsonar.organization=lari-korpi-personal
-            -Dsonar.projectKey=SlOrbA_Delta.Imaging
-            -Dsonar.host.url=${{ env.SONARQUBE_HOST_URL }}
-            -Dsonar.sources=Delta.Wsq/Delta.Wsq,Delta.Wsq/tests
-            -Dsonar.test.inclusions=**/*Tests.cs
-            -Dsonar.exclusions=**/bin/**,**/obj/**,**/*.xaml.cs
-            -Dsonar.coverage.exclusions=**/Tests/**,**/TestApplication/**
-
-      # Check Quality Gate
-      - name: Check SonarQube Quality Gate
-        id: quality-gate
-        uses: sonarsource/sonarqube-quality-gate-action@master
-        timeout-minutes: 5
+      # SonarQube scan upload
+      - name: End SonarQube analysis
+        shell: pwsh
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        continue-on-error: true
-
-      # Report Quality Gate result
-      - name: Report Quality Gate Status
-        run: |
-          if [ "${{ steps.quality-gate.outcome }}" == "failure" ]; then
-            echo "::warning::SonarQube Quality Gate failed. See https://sonarcloud.io/dashboard?id=SlOrbA_Delta.Imaging for details."
-          else
-            echo "✓ SonarQube Quality Gate passed"
-          fi
+        run: dotnet sonarscanner end /d:sonar.token="${env:SONAR_TOKEN}"
 
       # Publish results
       - name: Upload SonarQube analysis to artifacts
