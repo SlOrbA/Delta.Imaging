@@ -34,18 +34,17 @@ jobs:
             mingw-w64-i686-gcc
             mingw-w64-x86_64-gcc
             make
-            git
 
       # ── Clone NBIS source into two separate trees ──────────────────────────
       # setup.sh modifies files in the source tree (rules.mak, arch.mak, …),
       # so 32-bit and 64-bit builds must use separate directories.
+      # We clone with the runner's pre-installed git (PowerShell) to avoid
+      # PATH issues inside the MSYS2 login shell.
       - name: Clone NBIS source
-        shell: C:\msys64\usr\bin\bash.exe -l -e -o pipefail {0}
-        env:
-          MSYSTEM: MSYS
+        shell: pwsh
         run: |
-          git clone https://github.com/lessandro/nbis /c/nbis-src-32
-          cp -a /c/nbis-src-32 /c/nbis-src-64
+          git clone https://github.com/lessandro/nbis C:\nbis-src-32
+          Copy-Item -Recurse -Force C:\nbis-src-32 C:\nbis-src-64
 
       # ── Build 32-bit static libraries ─────────────────────────────────────
       # MSYSTEM=MINGW32 causes bash login to put /mingw32/bin first in PATH,
