@@ -45,8 +45,19 @@ jobs:
       # so 32-bit and 64-bit builds must use separate directories.
       # We clone with the runner's pre-installed git (PowerShell) to avoid
       # PATH issues inside the MSYS2 login shell.
+      - name: Cache NBIS source
+        uses: actions/cache@v4
+        id: nbis-cache
+        with:
+          path: |
+            C:\nbis-src-32
+            C:\nbis-src-64
+          key: nbis-src-${{ hashFiles('.github/workflows/build-nbis-dll.yml') }}
+          restore-keys: nbis-src-
+      
       - name: Clone NBIS source
         shell: pwsh
+        if: steps.nbis-cache.outputs.cache-hit != 'true'
         run: |
           git clone https://github.com/lessandro/nbis C:\nbis-src-32
           Copy-Item -Recurse -Force C:\nbis-src-32 C:\nbis-src-64
@@ -158,6 +169,7 @@ jobs:
           path: |
             Delta.Wsq\nbis\bin\Release\Win32\nbis32.dll
             Delta.Wsq\nbis\bin\Release\x64\nbis64.dll
+          retention-days: 30
 
       # ── Attach DLLs to the GitHub Release (only on release events) ─────────
       - name: Attach DLLs to GitHub Release

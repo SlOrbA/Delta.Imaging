@@ -58,6 +58,14 @@ jobs:
       - name: Restore
         run: dotnet restore Delta.Wsq/tests/Delta.Wsq.Tests/Delta.Wsq.Tests.csproj
 
+      - name: Restore NuGet cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
       - name: Build test project
         run: |
           dotnet build Delta.Wsq/tests/Delta.Wsq.Tests/Delta.Wsq.Tests.csproj `
