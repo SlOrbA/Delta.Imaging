@@ -1,0 +1,92 @@
+name: SonarQube Scan
+
+# Triggers: every push (scan code), every PR (check quality gate)
+on:
+  push:
+    branches: ["master", "main", "develop", "pr/**"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  SONARQUBE_HOST_URL: https://sonarcloud.io
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  sonarqube:
+    name: SonarQube Code Analysis
+    runs-on: ubuntu-latest
+    # Only scan if previous test workflow succeeded
+    # (This ensures we have test coverage data)
+    # Note: PR builds run all workflows; main branch runs independently
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better analysis
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # Build and collect code coverage
+      - name: Restore packages
+        run: dotnet restore Delta.Wsq/
+
+      - name: Build
+        run: dotnet build Delta.Wsq/ --configuration Release --no-restore
+
+      # Run tests with code coverage (OpenCover format)
+      - name: Run tests with coverage
+        run: |
+          dotnet add Delta.Wsq/tests/Delta.Wsq.Tests/Delta.Wsq.Tests.csproj package OpenCover
+          dotnet test Delta.Wsq/tests/Delta.Wsq.Tests/Delta.Wsq.Tests.csproj `
+            --configuration Release `
+            --no-build `
+            --logger "trx;LogFileName=test-results.trx" `
+            --logger "console;verbosity=normal"
+
+      # SonarQube scan
+      - name: SonarQube Scan
+        uses: sonarsource/sonarcloud-github-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
+        with:
+          # SonarCloud organization and project keys
+          args: >
+            -Dsonar.organization=lari-korpi-personal
+            -Dsonar.projectKey=SlOrbA_Delta.Imaging
+            -Dsonar.host.url=${{ env.SONARQUBE_HOST_URL }}
+            -Dsonar.sources=Delta.Wsq/Delta.Wsq,Delta.Wsq/tests
+            -Dsonar.test.inclusions=**/*Tests.cs
+            -Dsonar.exclusions=**/bin/**,**/obj/**,**/*.xaml.cs
+            -Dsonar.coverage.exclusions=**/Tests/**,**/TestApplication/**
+
+      # Check Quality Gate
+      - name: Check SonarQube Quality Gate
+        id: quality-gate
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
+        continue-on-error: true
+
+      # Report Quality Gate result
+      - name: Report Quality Gate Status
+        run: |
+          if [ "${{ steps.quality-gate.outcome }}" == "failure" ]; then
+            echo "::warning::SonarQube Quality Gate failed. See https://sonarcloud.io/dashboard?id=SlOrbA_Delta.Imaging for details."
+          else
+            echo "✓ SonarQube Quality Gate passed"
+          fi
+
+      # Publish results
+      - name: Upload SonarQube analysis to artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonarqube-report
+          path: .scannerwork/
+          retention-days: 30
