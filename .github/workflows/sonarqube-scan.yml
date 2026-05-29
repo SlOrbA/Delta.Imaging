@@ -14,10 +14,9 @@ env:
 jobs:
   sonarqube:
     name: SonarQube Code Analysis
-    runs-on: ubuntu-latest
-    # Only scan if previous test workflow succeeded
-    # (This ensures we have test coverage data)
-    # Note: PR builds run all workflows; main branch runs independently
+    runs-on: windows-latest
+    # Run on windows-latest because project targets net8.0-windows
+    # (Windows Desktop Framework required for tests)
 
     steps:
       - name: Checkout code
