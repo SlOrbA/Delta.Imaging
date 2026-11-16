@@ -57,7 +57,7 @@ dotnet build Delta.Wsq/Delta.Wsq/Delta.Wsq.csproj
 
 The DLLs are built from NBIS C source using MSYS2 + MSVC. See [`Delta.Wsq/nbis/BUILDING.md`](Delta.Wsq/nbis/BUILDING.md) for detailed instructions.
 
-The CI workflow ([`build-nbis-dll.yml`](.github/workflows/build-nbis-dll.yml)) builds them automatically on every push and attaches them to GitHub Releases.
+The CI workflow ([`build-nbis-dll.yml`](.github/workflows/build-nbis-dll.yml)) builds them automatically on every push, and [`release.yml`](.github/workflows/release.yml) attaches them (together with the NBIS static libraries) to GitHub Releases.
 
 ## Running tests
 

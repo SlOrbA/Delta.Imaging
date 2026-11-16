@@ -1,0 +1,53 @@
+name: Release
+
+# Builds nbis32.dll / nbis64.dll and the NBIS static libraries for a new
+# GitHub Release and attaches them as release assets.
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to (re)attach assets to, e.g. v1.3.1"
+        required: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build nbis DLL
+    uses: ./.github/workflows/build-nbis-dll.yml
+
+  attach:
+    name: Attach assets to release
+    needs: build
+    runs-on: ubuntu-latest
+    # Only this job may modify the release.
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package static libraries
+        run: |
+          (cd artifacts/nbis-static-libs/lib32 && zip -q -X "$GITHUB_WORKSPACE/nbis-lib32.zip" *.a)
+          (cd artifacts/nbis-static-libs/lib64 && zip -q -X "$GITHUB_WORKSPACE/nbis-lib64.zip" *.a)
+          ls -l nbis-lib32.zip nbis-lib64.zip artifacts/nbis-dll/*/*.dll
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || inputs.tag }}
+          files: |
+            artifacts/nbis-dll/Win32/nbis32.dll
+            artifacts/nbis-dll/x64/nbis64.dll
+            nbis-lib32.zip
+            nbis-lib64.zip

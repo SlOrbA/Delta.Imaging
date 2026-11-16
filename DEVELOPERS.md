@@ -128,7 +128,7 @@ CI workflow (`test.yml`):
 
 ### build-nbis-dll.yml
 
-**Trigger:** Every push, PR, release
+**Trigger:** Every push, PR (also reused by `test.yml`, `sonarqube-scan.yml`, `release.yml`)
 **Steps:**
 1. Setup MSYS2 MinGW toolchains (cached)
 2. Clone NBIS source
@@ -136,13 +136,22 @@ CI workflow (`test.yml`):
 4. Patch + build 64-bit static libraries
 5. Build MSVC DLL projects
 6. Verify no CRT dependencies
-7. Upload DLL artifacts
-8. (On release) Attach to GitHub Release
+7. Upload DLL artifacts (`nbis-dll`) and static libraries (`nbis-static-libs`)
 
 **Environment:**
 - OS: Windows Latest (windows-2025-vs2026)
 - MSYS2: MINGW32 + MINGW64
 - MSVC: Visual Studio 2022 (v143 toolset)
+
+### release.yml
+
+**Trigger:** GitHub Release created (or manual run with an existing tag)
+**Steps:**
+1. Build via `build-nbis-dll.yml`
+2. Zip the static libraries
+3. Attach `nbis32.dll`, `nbis64.dll`, `nbis-lib32.zip`, `nbis-lib64.zip` to the release
+
+Only the attach job has `contents: write`; the build itself runs read-only.
 
 ### test.yml
 

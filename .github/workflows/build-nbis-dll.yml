@@ -1,15 +1,18 @@
 name: Build nbis DLL
 
-# Triggers: every push/PR (artifact only), every release (also attaches to release).
-# workflow_call allows other workflows (e.g. test.yml) to reuse this build job.
+# Triggers: every push/PR (artifacts only).
+# workflow_call allows other workflows (test.yml, release.yml, …) to reuse this build job.
+# Attaching the build outputs to a GitHub Release is done by release.yml, so this
+# workflow only ever needs read access to the repository.
 on:
   push:
     branches: ["**"]
   pull_request:
   workflow_call:
   workflow_dispatch:
-  release:
-    types: [created]
+
+permissions:
+  contents: read
 
 env:
   # Force GitHub Actions to use Node.js 24 (Node.js 20 deprecated June 2, 2026)
@@ -180,8 +183,6 @@ jobs:
           New-Item -ItemType Directory -Force -Path staticlibs\lib32, staticlibs\lib64 | Out-Null
           Copy-Item C:\NBISBuild32\lib\*.a staticlibs\lib32\
           Copy-Item C:\NBISBuild64\lib\*.a staticlibs\lib64\
-          Compress-Archive -Path staticlibs\lib32\* -DestinationPath nbis-lib32.zip -Force
-          Compress-Archive -Path staticlibs\lib64\* -DestinationPath nbis-lib64.zip -Force
 
       - name: Upload static library artifacts
         uses: actions/upload-artifact@v4
@@ -189,14 +190,3 @@ jobs:
           name: nbis-static-libs
           path: staticlibs
           retention-days: 30
-
-      # ── Attach DLLs and static libraries to the GitHub Release ────────────
-      - name: Attach DLLs to GitHub Release
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            Delta.Wsq\nbis\bin\Release\Win32\nbis32.dll
-            Delta.Wsq\nbis\bin\Release\x64\nbis64.dll
-            nbis-lib32.zip
-            nbis-lib64.zip
