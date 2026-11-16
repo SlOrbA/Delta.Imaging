@@ -155,7 +155,7 @@ jobs:
         run: dotnet sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
 
       - name: Publish test results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@d61b558e8df85cb60d09ca3e5b09653b4477cea7 # v1
         if: always()
         with:
           name: xUnit Tests

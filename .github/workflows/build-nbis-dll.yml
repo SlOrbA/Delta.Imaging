@@ -68,7 +68,7 @@ jobs:
       # cache: true reuses the package cache across runs (saves ~1 min).
       - name: Set up MSYS2
         if: env.FROM_SOURCE == 'true'
-        uses: msys2/setup-msys2@v2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: MSYS
           update: true
@@ -146,7 +146,7 @@ jobs:
 
       # ── Build the DLL with MSVC ────────────────────────────────────────────
       - name: Add MSBuild to PATH
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2.0.0
 
       - name: Build nbis32.dll  (Release | Win32)
         run: |
