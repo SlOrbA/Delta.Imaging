@@ -21,6 +21,10 @@ on:
         description: "committed = use the .a files in the repo, source = rebuild them with MSYS2"
         type: string
         default: committed
+      ref:
+        description: "Git ref to build (default: the triggering commit)"
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       libs:
@@ -55,6 +59,8 @@ jobs:
       # ── Repository checkout ────────────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       # ── MSYS2 with both MinGW toolchains ──────────────────────────────────
       # The msys2/setup-msys2 action installs MSYS2 to C:\msys64 and registers

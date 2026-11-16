@@ -25,6 +25,8 @@ jobs:
     uses: ./.github/workflows/build-nbis-dll.yml
     with:
       libs: committed
+      # Manual runs start from the default branch: build the requested tag.
+      ref: ${{ inputs.tag }}
 
   attach:
     name: Attach assets to release
