@@ -141,13 +141,25 @@ jobs:
       - name: Run tests with coverage
         shell: pwsh
         run: |
+          # Native stderr is captured too; don't let it abort the script.
+          $ErrorActionPreference = 'Continue'
           dotnet test $env:TEST_PROJECT `
             --configuration Release `
             --no-build `
             --logger "trx;LogFileName=test-results.trx" `
             --logger "console;verbosity=normal" `
             --collect:"XPlat Code Coverage" `
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover `
+            2>&1 | Tee-Object -Variable testOutput
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          # The native DLL must not print NBIS debug/progress messages (#11).
+          $leaks = $testOutput | Select-String -Pattern 'frame header (read|written)|Tables for wavelet decomposition finished|WSQ reconstruction of image finished'
+          if ($leaks) {
+            Write-Host "::error::nbis DLL writes NBIS debug output to stderr (is 'debug' non-zero in mingw_shim.cpp?)"
+            $leaks | Select-Object -First 5 | ForEach-Object { Write-Host $_ }
+            exit 1
+          }
 
       - name: End SonarCloud analysis
         if: env.SONAR_TOKEN != ''
