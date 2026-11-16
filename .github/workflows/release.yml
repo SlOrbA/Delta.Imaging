@@ -18,9 +18,13 @@ permissions:
   contents: read
 
 jobs:
+  # Same build as CI (committed static libraries), so the release ships
+  # exactly what was tested.
   build:
     name: Build nbis DLL
     uses: ./.github/workflows/build-nbis-dll.yml
+    with:
+      libs: committed
 
   attach:
     name: Attach assets to release
