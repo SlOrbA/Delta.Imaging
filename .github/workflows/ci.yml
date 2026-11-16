@@ -45,7 +45,9 @@ jobs:
         working-directory: Delta.Wsq/nbis
         run: |
           status=0
-          for lib in $(grep -o 'lib\(32\|64\)\\[a-z0-9]*\.a' nbis.vcxproj | tr '\\' '/' | sort -u); do
+          # vcxproj entries look like lib32\libwsq.a → lib32/libwsq.a
+          for m in $(grep -oE 'lib(32|64).lib[a-z0-9]+[.]a' nbis.vcxproj | sort -u); do
+            lib="${m:0:5}/${m:6}"
             if [ ! -f "$lib" ]; then
               echo "::error file=Delta.Wsq/nbis/nbis.vcxproj::missing static library $lib"
               status=1
