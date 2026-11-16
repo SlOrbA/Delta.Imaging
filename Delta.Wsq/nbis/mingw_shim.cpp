@@ -3,7 +3,10 @@
 #include <stdarg.h>
 
 extern "C" {
-	int debug = 1;
+	// NBIS debug level (extern int debug in wsq.h / jpegl.h). Values > 0 make
+	// libwsq print progress messages to stderr on every encode/decode, so keep
+	// it off. Genuine "ERROR : ..." messages are printed regardless.
+	int debug = 0;
 	int __cdecl __mingw_vfprintf(FILE* fileptr, const char* format, va_list arglist);
 	int __cdecl __mingw_vfscanf(FILE* fileptr, const char* format, va_list arglist);
 	int __cdecl __mingw_vprintf(const char* format, va_list arglist);

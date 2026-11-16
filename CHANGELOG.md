@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- nbis DLL no longer prints NBIS debug/progress messages to stderr on every encode/decode (`int debug = 0` in `mingw_shim.cpp`). Console applications and services hosting the DLL see less output; genuine NBIS error messages are still printed (#11)
+
 ### Added
 - Extended test coverage: edge cases, parametrized tests, corruption handling
 - GitHub Actions Node.js 24 support (Node.js 20 deprecated)
