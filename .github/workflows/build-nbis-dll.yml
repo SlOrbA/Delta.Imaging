@@ -55,8 +55,9 @@ jobs:
           path: |
             C:\nbis-src-32
             C:\nbis-src-64
+          # No restore-keys: a partial match would restore a stale (already
+          # built) tree and make the clone step below fail on a non-empty dir.
           key: nbis-src-${{ hashFiles('.github/workflows/build-nbis-dll.yml') }}
-          restore-keys: nbis-src-
       
       - name: Clone NBIS source
         shell: pwsh
