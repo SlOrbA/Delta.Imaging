@@ -133,7 +133,7 @@ jobs:
             /d:sonar.test.inclusions=**/*Tests.cs `
             /d:sonar.exclusions=**/bin/**,**/obj/**,**/*.xaml.cs `
             /d:sonar.coverage.exclusions=**/Tests/**,**/TestApplication/** `
-            /d:sonar.cs.opencover.reportPaths="**/coverage.opencover.xml"
+            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
 
       - name: Build
         run: dotnet build ${{ env.TEST_PROJECT }} --configuration Release --no-restore
