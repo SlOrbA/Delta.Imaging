@@ -27,8 +27,9 @@ Delta.Imaging/
 │   └── images/             # Test WSQ files
 ├── Delta.ImageRenameTool/  # Image renaming utility
 ├── .github/workflows/      # CI/CD automation
-│   ├── build-nbis-dll.yml  # Build nbis DLLs (MSYS2 + MSVC)
-│   └── test.yml            # Run tests after build
+│   ├── ci.yml              # Lint → build DLL → tests + SonarCloud
+│   ├── build-nbis-dll.yml  # Build nbis DLLs (reusable; optional NBIS source build)
+│   └── release.yml         # Attach DLLs + static libs to GitHub Releases
 └── Documentation/
     ├── README.md           # Project overview
     ├── CHANGELOG.md        # Version history
@@ -117,46 +118,46 @@ dotnet test tests/Delta.Wsq.Tests/Delta.Wsq.Tests.csproj
 
 ### Automated Testing
 
-CI workflow (`test.yml`):
-1. Build DLLs from source (via `build-nbis-dll.yml`)
-2. Download DLL artifacts
-3. Build test project
-4. Run all tests
-5. Report results via GitHub Checks
+CI workflow (`ci.yml`) — see [CI/CD Workflows](#cicd-workflows).
 
 ## CI/CD Workflows
 
+Design goal: **fail early**. Cheap checks run first and every stage only
+starts when the previous one passed, so a broken change is reported in
+seconds instead of after a full Windows build.
+
+### ci.yml
+
+**Trigger:** Push to `master`, every PR (a newer push cancels the running PR pipeline)
+**Stages:**
+1. `lint` (ubuntu, seconds) — actionlint; every NBIS `.a` referenced by `nbis.vcxproj`
+   exists and none references the legacy CRT (`__imp___iob` / `msvcr100.dll`)
+2. `build-dll` — `build-nbis-dll.yml` against the **committed** static libraries
+3. `test` — build, xUnit tests with Coverlet (OpenCover) coverage, SonarCloud analysis
+   (skipped if `SONAR_TOKEN` is unavailable), results published as GitHub Checks
+
 ### build-nbis-dll.yml
 
-**Trigger:** Every push, PR, release
+Reusable DLL build. Input `libs`:
+- `committed` — link against `Delta.Wsq/nbis/lib32|lib64` (fast, no MSYS2)
+- `source` — first rebuild the NBIS static libraries with MSYS2 + MinGW-w64
+  (see [BUILDING.md](Delta.Wsq/nbis/BUILDING.md))
+
+Then: MSVC build (Win32 + x64), verify no CRT dependencies, upload `nbis-dll` and
+`nbis-static-libs` (the libraries that were linked) artifacts.
+
+**Source build runs:** on PRs that change this workflow, weekly (Mon 05:00 UTC, catches
+runner / MSYS2 drift) and on manual dispatch.
+
+### release.yml
+
+**Trigger:** GitHub Release created (or manual run with an existing tag)
 **Steps:**
-1. Setup MSYS2 MinGW toolchains (cached)
-2. Clone NBIS source
-3. Patch + build 32-bit static libraries
-4. Patch + build 64-bit static libraries
-5. Build MSVC DLL projects
-6. Verify no CRT dependencies
-7. Upload DLL artifacts
-8. (On release) Attach to GitHub Release
+1. Build via `build-nbis-dll.yml` with the committed libraries (same as CI tested)
+2. Zip the static libraries
+3. Attach `nbis32.dll`, `nbis64.dll`, `nbis-lib32.zip`, `nbis-lib64.zip` to the release
 
-**Environment:**
-- OS: Windows Latest (windows-2025-vs2026)
-- MSYS2: MINGW32 + MINGW64
-- MSVC: Visual Studio 2022 (v143 toolset)
-
-### test.yml
-
-**Trigger:** Every push, PR
-**Steps:**
-1. Invoke `build-nbis-dll.yml` (gets DLLs)
-2. Download DLL artifacts
-3. Setup .NET 8.0
-4. Restore NuGet packages
-5. Build test project
-6. Run xUnit tests
-7. Publish results as GitHub Checks
-
-**Permissions:** Requires `checks: write` for test-reporter action
+Only the attach job has `contents: write`; everything else runs read-only.
 
 ## Code Style
 
@@ -222,7 +223,7 @@ If NBIS source needs updating:
 
 **Cause:** DLL path wrong or artifact not downloaded
 
-**Solution:** Check `test.yml` flattens artifact structure correctly
+**Solution:** Check the `test` job in `ci.yml` flattens the artifact structure correctly
 
 ### "Node.js 20 actions are deprecated" warnings
 

@@ -1,8 +1,8 @@
 Delta.Imaging
 =============
 
-[![Build nbis DLL](https://github.com/SlOrbA/Delta.Imaging/actions/workflows/build-nbis-dll.yml/badge.svg)](https://github.com/SlOrbA/Delta.Imaging/actions/workflows/build-nbis-dll.yml)
-[![Test](https://github.com/SlOrbA/Delta.Imaging/actions/workflows/test.yml/badge.svg)](https://github.com/SlOrbA/Delta.Imaging/actions/workflows/test.yml)
+[![CI](https://github.com/SlOrbA/Delta.Imaging/actions/workflows/ci.yml/badge.svg)](https://github.com/SlOrbA/Delta.Imaging/actions/workflows/ci.yml)
+[![NBIS source build](https://github.com/SlOrbA/Delta.Imaging/actions/workflows/build-nbis-dll.yml/badge.svg?event=schedule)](https://github.com/SlOrbA/Delta.Imaging/actions/workflows/build-nbis-dll.yml)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=SlOrbA_Delta.Imaging&metric=alert_status)](https://sonarcloud.io/dashboard?id=SlOrbA_Delta.Imaging)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=SlOrbA_Delta.Imaging&metric=coverage)](https://sonarcloud.io/dashboard?id=SlOrbA_Delta.Imaging)
 [![Latest Release](https://img.shields.io/github/v/release/SlOrbA/Delta.Imaging?color=blue&label=Latest%20Release)](https://github.com/SlOrbA/Delta.Imaging/releases)
@@ -57,7 +57,7 @@ dotnet build Delta.Wsq/Delta.Wsq/Delta.Wsq.csproj
 
 The DLLs are built from NBIS C source using MSYS2 + MSVC. See [`Delta.Wsq/nbis/BUILDING.md`](Delta.Wsq/nbis/BUILDING.md) for detailed instructions.
 
-The CI workflow ([`build-nbis-dll.yml`](.github/workflows/build-nbis-dll.yml)) builds them automatically on every push and attaches them to GitHub Releases.
+[`ci.yml`](.github/workflows/ci.yml) builds them on every PR and push to `master` against the committed NBIS static libraries; [`build-nbis-dll.yml`](.github/workflows/build-nbis-dll.yml) additionally verifies weekly that those libraries can still be rebuilt from source. [`release.yml`](.github/workflows/release.yml) attaches the DLLs and static libraries to GitHub Releases.
 
 ## Running tests
 

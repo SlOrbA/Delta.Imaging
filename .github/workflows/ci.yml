@@ -1,0 +1,163 @@
+name: CI
+
+# Fail early: cheapest checks first, each stage only runs if the previous one
+# passed.
+#
+#   lint (ubuntu, seconds)  →  build-dll (windows)  →  test (windows)
+#   - actionlint               - MSVC build against     - build + xUnit tests
+#   - committed NBIS libs        committed NBIS libs     - coverage → SonarCloud
+#     complete & CRT-clean     - DLL dependency check
+#
+# The full NBIS source build lives in build-nbis-dll.yml (PRs touching it,
+# weekly, on demand); releases are handled by release.yml.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same PR makes the running pipeline obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  # ── Stage 1: static checks (no Windows runner, no build) ───────────────────
+  lint:
+    name: Lint workflows & check NBIS libraries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color
+
+      # Every .a referenced by nbis.vcxproj must exist, and none may reference
+      # the legacy MinGW / VS 2010 CRT (see Delta.Wsq/nbis/BUILDING.md).
+      - name: Check committed NBIS static libraries
+        working-directory: Delta.Wsq/nbis
+        run: |
+          status=0
+          # vcxproj entries look like lib32\libwsq.a → lib32/libwsq.a
+          while read -r m; do
+            lib="${m:0:5}/${m:6}"
+            if [ ! -f "$lib" ]; then
+              echo "::error file=Delta.Wsq/nbis/nbis.vcxproj::missing static library $lib"
+              status=1
+            elif grep -a -q -E '__imp___iob|msvcr100' "$lib"; then
+              echo "::error file=Delta.Wsq/nbis/$lib::references the legacy CRT (__imp___iob / msvcr100.dll)"
+              status=1
+            fi
+          done < <(grep -oE 'lib(32|64).lib[a-z0-9]+[.]a' nbis.vcxproj | sort -u)
+          exit $status
+
+  # ── Stage 2: native DLL ────────────────────────────────────────────────────
+  build-dll:
+    name: Build nbis DLL
+    needs: lint
+    uses: ./.github/workflows/build-nbis-dll.yml
+    with:
+      libs: committed
+
+  # ── Stage 3: tests + code analysis ─────────────────────────────────────────
+  # One job: the SonarScanner has to wrap the build and consume the coverage
+  # of the same test run, so building/testing twice would be pure duplication.
+  test:
+    name: Test & analyze
+    needs: build-dll
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      checks: write   # dorny/test-reporter
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      TEST_PROJECT: Delta.Wsq/tests/Delta.Wsq.Tests/Delta.Wsq.Tests.csproj
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # SonarCloud uses history for new-code detection
+
+      # The test project's <Content> items copy the DLLs from dependencies/
+      # next to the test assembly at build time.
+      - name: Download nbis DLL artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nbis-dll
+          path: Delta.Wsq/dependencies/
+
+      - name: Flatten DLL structure
+        shell: pwsh
+        run: |
+          Move-Item Delta.Wsq/dependencies/Win32/nbis32.dll Delta.Wsq/dependencies/ -Force
+          Move-Item Delta.Wsq/dependencies/x64/nbis64.dll   Delta.Wsq/dependencies/ -Force
+          Remove-Item Delta.Wsq/dependencies/Win32, Delta.Wsq/dependencies/x64 -Recurse -Force
+          Get-ChildItem Delta.Wsq/dependencies/*.dll | Select-Object Name
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: NuGet cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore ${{ env.TEST_PROJECT }}
+
+      # Skipped when the secret is unavailable (e.g. PRs from forks); the
+      # tests still run.
+      - name: Begin SonarCloud analysis
+        if: env.SONAR_TOKEN != ''
+        shell: pwsh
+        run: |
+          dotnet tool install --global dotnet-sonarscanner
+          dotnet sonarscanner begin `
+            /k:"SlOrbA_Delta.Imaging" `
+            /o:"lari-korpi-personal" `
+            /d:sonar.host.url=https://sonarcloud.io `
+            /d:sonar.token="$env:SONAR_TOKEN" `
+            /d:sonar.sources=Delta.Wsq/Delta.Wsq,Delta.Wsq/tests `
+            /d:sonar.test.inclusions=**/*Tests.cs `
+            /d:sonar.exclusions=**/bin/**,**/obj/**,**/*.xaml.cs `
+            /d:sonar.coverage.exclusions=**/Tests/**,**/TestApplication/** `
+            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+
+      - name: Build
+        run: dotnet build ${{ env.TEST_PROJECT }} --configuration Release --no-restore
+
+      - name: Run tests with coverage
+        shell: pwsh
+        run: |
+          dotnet test $env:TEST_PROJECT `
+            --configuration Release `
+            --no-build `
+            --logger "trx;LogFileName=test-results.trx" `
+            --logger "console;verbosity=normal" `
+            --collect:"XPlat Code Coverage" `
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+
+      - name: End SonarCloud analysis
+        if: env.SONAR_TOKEN != ''
+        shell: pwsh
+        run: dotnet sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
+
+      - name: Publish test results
+        uses: dorny/test-reporter@d61b558e8df85cb60d09ca3e5b09653b4477cea7 # v1
+        if: always()
+        with:
+          name: xUnit Tests
+          path: "**/*.trx"
+          reporter: dotnet-trx

@@ -1,15 +1,45 @@
 name: Build nbis DLL
 
-# Triggers: every push/PR (artifact only), every release (also attaches to release).
-# workflow_call allows other workflows (e.g. test.yml) to reuse this build job.
+# Builds nbis32.dll / nbis64.dll with MSVC.
+#
+# Two modes (input `libs`):
+#   committed – link against the NBIS static libraries committed in
+#           Delta.Wsq/nbis/lib32 and lib64. Fast (no MSYS2). Used by ci.yml
+#           and release.yml, so CI tests exactly what developers build locally.
+#   source    – first rebuild the NBIS static libraries from source with MSYS2 +
+#           MinGW-w64 (see Delta.Wsq/nbis/BUILDING.md). Verifies the source
+#           build still works on current runner images; the resulting
+#           `nbis-static-libs` artifact can be used to refresh the committed
+#           libraries.
+#
+# The source build runs on PRs that change this workflow, weekly (to catch
+# runner / MSYS2 drift early) and on demand.
 on:
-  push:
-    branches: ["**"]
-  pull_request:
   workflow_call:
+    inputs:
+      libs:
+        description: "committed = use the .a files in the repo, source = rebuild them with MSYS2"
+        type: string
+        default: committed
+      ref:
+        description: "Git ref to build (default: the triggering commit)"
+        type: string
+        default: ""
   workflow_dispatch:
-  release:
-    types: [created]
+    inputs:
+      libs:
+        description: "Which NBIS static libraries to link against"
+        type: choice
+        options: [source, committed]
+        default: source
+  pull_request:
+    paths:
+      - .github/workflows/build-nbis-dll.yml
+  schedule:
+    - cron: "0 5 * * 1"   # Mondays 05:00 UTC
+
+permissions:
+  contents: read
 
 env:
   # Force GitHub Actions to use Node.js 24 (Node.js 20 deprecated June 2, 2026)
@@ -19,18 +49,26 @@ jobs:
   build:
     name: Build nbis32.dll / nbis64.dll
     runs-on: windows-latest
+    env:
+      # Direct pull_request / schedule runs have no inputs (inputs.libs is
+      # null) → build from source. Do not test github.event_name here: when
+      # called from ci.yml it is the caller's event (e.g. pull_request).
+      FROM_SOURCE: ${{ inputs.libs != 'committed' }}
 
     steps:
       # ── Repository checkout ────────────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       # ── MSYS2 with both MinGW toolchains ──────────────────────────────────
       # The msys2/setup-msys2 action installs MSYS2 to C:\msys64 and registers
       # the `msys2` shell command used in later steps.
       # cache: true reuses the package cache across runs (saves ~1 min).
       - name: Set up MSYS2
-        uses: msys2/setup-msys2@v2
+        if: env.FROM_SOURCE == 'true'
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: MSYS
           update: true
@@ -43,23 +81,14 @@ jobs:
       # ── Clone NBIS source into two separate trees ──────────────────────────
       # setup.sh modifies files in the source tree (rules.mak, arch.mak, …),
       # so 32-bit and 64-bit builds must use separate directories.
+      # Always a fresh clone: the source build must start from clean sources.
       # We clone with the runner's pre-installed git (PowerShell) to avoid
       # PATH issues inside the MSYS2 login shell.
-      - name: Cache NBIS source
-        uses: actions/cache@v4
-        id: nbis-cache
-        with:
-          path: |
-            C:\nbis-src-32
-            C:\nbis-src-64
-          key: nbis-src-${{ hashFiles('.github/workflows/build-nbis-dll.yml') }}
-          restore-keys: nbis-src-
-      
       - name: Clone NBIS source
+        if: env.FROM_SOURCE == 'true'
         shell: pwsh
-        if: steps.nbis-cache.outputs.cache-hit != 'true'
         run: |
-          git clone https://github.com/lessandro/nbis C:\nbis-src-32
+          git clone --depth 1 https://github.com/lessandro/nbis C:\nbis-src-32
           Copy-Item -Recurse -Force C:\nbis-src-32 C:\nbis-src-64
 
       # ── Build 32-bit static libraries ─────────────────────────────────────
@@ -67,6 +96,7 @@ jobs:
       # Setting MSYSTEM=MINGW32 in env causes the login shell to put
       # /mingw32/bin first in PATH, making gcc = i686-w64-mingw32-gcc.
       - name: Build NBIS 32-bit static libraries
+        if: env.FROM_SOURCE == 'true'
         shell: msys2 {0}
         env:
           MSYSTEM: MINGW32
@@ -85,6 +115,7 @@ jobs:
       # ── Build 64-bit static libraries ─────────────────────────────────────
       # MSYSTEM=MINGW64 puts /mingw64/bin first → gcc = x86_64-w64-mingw32-gcc
       - name: Build NBIS 64-bit static libraries
+        if: env.FROM_SOURCE == 'true'
         shell: msys2 {0}
         env:
           MSYSTEM: MINGW64
@@ -102,6 +133,7 @@ jobs:
       # INSTALL_ROOT_LIB_DIR in rules_msys.mak.src is $(FINAL_INSTALLATION_DIR)/lib,
       # so 'make install' puts the .a files at C:\NBISBuild{32,64}\lib\.
       - name: Copy static libraries into project
+        if: env.FROM_SOURCE == 'true'
         shell: pwsh
         run: |
           Write-Host "32-bit libraries:"
@@ -114,7 +146,7 @@ jobs:
 
       # ── Build the DLL with MSVC ────────────────────────────────────────────
       - name: Add MSBuild to PATH
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2.0.0
 
       - name: Build nbis32.dll  (Release | Win32)
         run: |
@@ -171,32 +203,15 @@ jobs:
             Delta.Wsq\nbis\bin\Release\x64\nbis64.dll
           retention-days: 30
 
-      # ── Upload the freshly built NBIS static libraries ────────────────────
-      # Lets developers build the DLL locally with Visual Studio without
-      # having to set up MSYS2 and compile NBIS themselves.
-      - name: Package static libraries
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path staticlibs\lib32, staticlibs\lib64 | Out-Null
-          Copy-Item C:\NBISBuild32\lib\*.a staticlibs\lib32\
-          Copy-Item C:\NBISBuild64\lib\*.a staticlibs\lib64\
-          Compress-Archive -Path staticlibs\lib32\* -DestinationPath nbis-lib32.zip -Force
-          Compress-Archive -Path staticlibs\lib64\* -DestinationPath nbis-lib64.zip -Force
-
+      # ── Upload the static libraries the DLL was linked against ────────────
+      # libs=source: the freshly built libraries (use them to refresh the
+      # committed ones). Otherwise: the committed libraries (release.yml
+      # attaches them to the release).
       - name: Upload static library artifacts
         uses: actions/upload-artifact@v4
         with:
           name: nbis-static-libs
-          path: staticlibs
+          path: |
+            Delta.Wsq/nbis/lib32/*.a
+            Delta.Wsq/nbis/lib64/*.a
           retention-days: 30
-
-      # ── Attach DLLs and static libraries to the GitHub Release ────────────
-      - name: Attach DLLs to GitHub Release
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            Delta.Wsq\nbis\bin\Release\Win32\nbis32.dll
-            Delta.Wsq\nbis\bin\Release\x64\nbis64.dll
-            nbis-lib32.zip
-            nbis-lib64.zip
