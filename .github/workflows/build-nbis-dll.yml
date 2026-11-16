@@ -162,6 +162,15 @@ jobs:
             /p:Platform=x64 `
             /m
 
+      # Debug builds are not shipped, but developers build them locally;
+      # make sure all four configurations in nbis.vcxproj link.
+      - name: Build Debug configurations (Win32 + x64)
+        run: |
+          foreach ($platform in 'Win32', 'x64') {
+            msbuild Delta.Wsq\nbis\nbis.vcxproj /p:Configuration=Debug /p:Platform=$platform /m
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
       # ── Verify: no legacy MSVC CRT dependency ─────────────────────────────
       # If msvcr*.dll appears in the dependency list the build is broken.
       # vcruntime140.dll / ucrtbase.dll are also flagged because the goal is
