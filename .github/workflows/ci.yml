@@ -46,7 +46,7 @@ jobs:
         run: |
           status=0
           # vcxproj entries look like lib32\libwsq.a → lib32/libwsq.a
-          for m in $(grep -oE 'lib(32|64).lib[a-z0-9]+[.]a' nbis.vcxproj | sort -u); do
+          while read -r m; do
             lib="${m:0:5}/${m:6}"
             if [ ! -f "$lib" ]; then
               echo "::error file=Delta.Wsq/nbis/nbis.vcxproj::missing static library $lib"
@@ -55,7 +55,7 @@ jobs:
               echo "::error file=Delta.Wsq/nbis/$lib::references the legacy CRT (__imp___iob / msvcr100.dll)"
               status=1
             fi
-          done
+          done < <(grep -oE 'lib(32|64).lib[a-z0-9]+[.]a' nbis.vcxproj | sort -u)
           exit $status
 
   # ── Stage 2: native DLL ────────────────────────────────────────────────────
