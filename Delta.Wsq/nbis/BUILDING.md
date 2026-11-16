@@ -59,6 +59,23 @@ components present on every modern Windows installation. No redistributable pack
 
 ---
 
+## Prebuilt Static Libraries
+
+The `.a` files in `lib32/` and `lib64/` are built from source by the
+[`build-nbis-dll.yml`](../../.github/workflows/build-nbis-dll.yml) workflow (MSYS2 + MinGW-w64,
+steps below) and committed to the repository. To build the DLL locally you only need
+Visual Studio — skip directly to Step 6.
+
+The same libraries are also available without cloning the repository:
+
+- every workflow run uploads them as the `nbis-static-libs` artifact
+- every GitHub Release has them attached as `nbis-lib32.zip` and `nbis-lib64.zip`
+
+To refresh the committed libraries, download the `nbis-static-libs` artifact from a successful
+run and copy its `lib32/` and `lib64/` contents over the files here.
+
+---
+
 ## Reproducing the Build
 
 ### Prerequisites

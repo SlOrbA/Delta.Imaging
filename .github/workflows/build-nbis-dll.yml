@@ -171,7 +171,26 @@ jobs:
             Delta.Wsq\nbis\bin\Release\x64\nbis64.dll
           retention-days: 30
 
-      # ── Attach DLLs to the GitHub Release (only on release events) ─────────
+      # ── Upload the freshly built NBIS static libraries ────────────────────
+      # Lets developers build the DLL locally with Visual Studio without
+      # having to set up MSYS2 and compile NBIS themselves.
+      - name: Package static libraries
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path staticlibs\lib32, staticlibs\lib64 | Out-Null
+          Copy-Item C:\NBISBuild32\lib\*.a staticlibs\lib32\
+          Copy-Item C:\NBISBuild64\lib\*.a staticlibs\lib64\
+          Compress-Archive -Path staticlibs\lib32\* -DestinationPath nbis-lib32.zip -Force
+          Compress-Archive -Path staticlibs\lib64\* -DestinationPath nbis-lib64.zip -Force
+
+      - name: Upload static library artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nbis-static-libs
+          path: staticlibs
+          retention-days: 30
+
+      # ── Attach DLLs and static libraries to the GitHub Release ────────────
       - name: Attach DLLs to GitHub Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
@@ -179,3 +198,5 @@ jobs:
           files: |
             Delta.Wsq\nbis\bin\Release\Win32\nbis32.dll
             Delta.Wsq\nbis\bin\Release\x64\nbis64.dll
+            nbis-lib32.zip
+            nbis-lib64.zip
