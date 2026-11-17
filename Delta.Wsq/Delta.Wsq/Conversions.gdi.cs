@@ -8,7 +8,7 @@ namespace Delta.Wsq
     {
         public static unsafe Bitmap ImageInfoToGdiImage(RawImageData info)
         {
-            if (info == null) throw new ArgumentNullException(nameof(info));
+            ArgumentNullException.ThrowIfNull(info);
             if (info.IsEmpty) throw new ArgumentException("The image is empty.", nameof(info));
 
             // 16bpp grayscale is not really supported by the underlying codec.
@@ -54,7 +54,7 @@ namespace Delta.Wsq
 
         public static unsafe RawImageData GdiImageToImageInfo(Bitmap image)
         {
-            if (image == null) throw new ArgumentNullException(nameof(image));
+            ArgumentNullException.ThrowIfNull(image);
 
             // 16bpp grayscale is not really supported by the underlying codec.
             if (/* image.PixelFormat != PixelFormat.Format16bppGrayScale && */ image.PixelFormat != PixelFormat.Format8bppIndexed)
@@ -98,7 +98,7 @@ namespace Delta.Wsq
 
         public unsafe static Bitmap To8bppBitmap(Bitmap input)
         {
-            if (input == null) throw new ArgumentNullException(nameof(input));
+            ArgumentNullException.ThrowIfNull(input);
             // An indexed image can only be used as is when its palette indexes
             // are the gray levels; otherwise convert it through its colors.
             if (input.PixelFormat == PixelFormat.Format8bppIndexed && HasGrayscalePalette(input))

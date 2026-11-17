@@ -10,7 +10,7 @@ namespace Delta.Wsq
         {
             const int defaultDpi = 96; // Use this one if resolution not set in the wsq file.
 
-            if (info == null) throw new ArgumentNullException(nameof(info));
+            ArgumentNullException.ThrowIfNull(info);
             if (info.IsEmpty) throw new ArgumentException("The image is empty.", nameof(info));
 
             // 16bpp grayscale is not really supported by the underlying codec.
@@ -41,7 +41,7 @@ namespace Delta.Wsq
 
         public static BitmapSource ToGray8BitmapSource(BitmapSource input)
         {
-            if (input == null) throw new ArgumentNullException(nameof(input));
+            ArgumentNullException.ThrowIfNull(input);
             if (input.Format == PixelFormats.Gray8)
                 return input; // We are already good!
             EnsureSupportedFormat(input.Format);
@@ -96,18 +96,11 @@ namespace Delta.Wsq
             return gray;
         }
 
-        // Gray level of every palette index. Without a palette the index is
-        // the gray level; indexes beyond the palette are black.
+        // Gray level of every palette index (WPF does not create indexed
+        // images without a palette). Indexes beyond the palette are black.
         private static byte[] PaletteGrayLevels(BitmapPalette palette)
         {
             var levels = new byte[256];
-            if (palette == null)
-            {
-                for (var i = 0; i < levels.Length; i++)
-                    levels[i] = (byte)i;
-                return levels;
-            }
-
             var colors = palette.Colors;
             for (var i = 0; i < colors.Count && i < levels.Length; i++)
                 levels[i] = (byte)((colors[i].R + colors[i].G + colors[i].B) / 3);

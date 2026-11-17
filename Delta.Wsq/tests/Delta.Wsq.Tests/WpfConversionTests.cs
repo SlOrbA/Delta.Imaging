@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+using System;
 using System.Linq;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -46,11 +46,11 @@ namespace Delta.Wsq.Tests
                 new BitmapPalette(colors), pixels, stride);
         }
 
-        public static IEnumerable<object[]> ColorFormats() => new[]
+        public static TheoryData<PixelFormat> ColorFormats() => new TheoryData<PixelFormat>
         {
-            new object[] { PixelFormats.Bgr24 },
-            new object[] { PixelFormats.Bgr32 },
-            new object[] { PixelFormats.Bgra32 },
+            PixelFormats.Bgr24,
+            PixelFormats.Bgr32,
+            PixelFormats.Bgra32,
         };
 
         private static void AssertTwoTone(byte[] data)
@@ -116,6 +116,52 @@ namespace Delta.Wsq.Tests
             Assert.Equal(Width, image.PixelWidth);
             Assert.Equal(Height, image.PixelHeight);
             Assert.Equal(data, Conversions.WpfImageToImageInfo(image).Data);
+        }
+
+        // ── Invalid arguments ─────────────────────────────────────────────────
+
+        private static BitmapSource MakeGray16Source() =>
+            BitmapSource.Create(4, 4, 96, 96, PixelFormats.Gray16, null, new byte[4 * 4 * 2], 8);
+
+        [Fact]
+        public void WpfImageToImageInfo_Null_ReturnsEmpty()
+        {
+            Assert.True(Conversions.WpfImageToImageInfo(null).IsEmpty);
+        }
+
+        [Fact]
+        public void WpfConversions_UnsupportedPixelFormat_Throw()
+        {
+            Assert.Throws<NotSupportedException>(() => Conversions.WpfImageToImageInfo(MakeGray16Source()));
+            Assert.Throws<NotSupportedException>(() => Conversions.ToGray8BitmapSource(MakeGray16Source()));
+        }
+
+        [Fact]
+        public void ToGray8BitmapSource_Gray8Input_IsReturnedUnchanged()
+        {
+            var source = BitmapSource.Create(4, 4, 96, 96, PixelFormats.Gray8, null, new byte[16], 4);
+
+            Assert.Same(source, Conversions.ToGray8BitmapSource(source));
+        }
+
+        [Fact]
+        public void WpfConversions_NullOrInvalidImage_Throw()
+        {
+            Assert.Throws<ArgumentNullException>(() => Conversions.ToGray8BitmapSource(null));
+            Assert.Throws<ArgumentNullException>(() => Conversions.ImageInfoToWpfImage(null));
+            Assert.Throws<ArgumentException>(() => Conversions.ImageInfoToWpfImage(new RawImageData()));
+            Assert.Throws<NotSupportedException>(() => Conversions.ImageInfoToWpfImage(
+                new RawImageData { Width = 4, Height = 4, PixelDepth = 16, Data = new byte[32] }));
+            Assert.Throws<ArgumentNullException>(() => new WsqEncoder().EncodeWpf(null));
+            Assert.Throws<ArgumentNullException>(() => new WsqDecoder().DecodeWpf(null));
+        }
+
+        [Fact]
+        public void ImageInfoToWpfImage_WithoutResolution_Uses96Dpi()
+        {
+            var info = new RawImageData { Width = 4, Height = 4, PixelDepth = 8, Resolution = 0, Data = new byte[16] };
+
+            Assert.Equal(96, Conversions.ImageInfoToWpfImage(info).DpiX, 3);
         }
 
         [Fact]

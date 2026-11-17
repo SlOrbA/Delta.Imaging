@@ -38,7 +38,7 @@ namespace Delta.Wsq
 
         public byte[] EncodeGdi(SD.Bitmap image, float bitrate = WsqCodec.Constants.DefaultBitrate, bool autoConvertToGrayscale = true)
         {
-            if (image == null) throw new ArgumentNullException(nameof(image));
+            ArgumentNullException.ThrowIfNull(image);
 
             RawImageData data = null;
             if (autoConvertToGrayscale)
@@ -67,7 +67,7 @@ namespace Delta.Wsq
 
         public byte[] EncodeWpf(SWMI.BitmapSource image, float bitrate = WsqCodec.Constants.DefaultBitrate, bool autoConvertToGrayscale = true)
         {
-            if (image == null) throw new ArgumentNullException(nameof(image));
+            ArgumentNullException.ThrowIfNull(image);
 
             SWMI.BitmapSource source = null;
             if (autoConvertToGrayscale)

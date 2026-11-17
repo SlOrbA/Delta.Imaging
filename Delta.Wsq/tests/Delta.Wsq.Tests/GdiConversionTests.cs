@@ -1,3 +1,4 @@
+using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using Xunit;
@@ -42,6 +43,35 @@ namespace Delta.Wsq.Tests
                 Assert.Equal(60, raw.Data[y * Width + 2]);
                 Assert.Equal(220, raw.Data[y * Width + Width - 3]);
             }
+        }
+
+        [Fact]
+        public void GdiConversions_NullOrInvalidImage_Throw()
+        {
+            Assert.Throws<ArgumentNullException>(() => Conversions.To8bppBitmap(null));
+            Assert.Throws<ArgumentNullException>(() => Conversions.GdiImageToImageInfo(null));
+            Assert.Throws<ArgumentNullException>(() => Conversions.ImageInfoToGdiImage(null));
+            Assert.Throws<ArgumentException>(() => Conversions.ImageInfoToGdiImage(new RawImageData()));
+            Assert.Throws<NotSupportedException>(() => Conversions.ImageInfoToGdiImage(
+                new RawImageData { Width = 4, Height = 4, PixelDepth = 16, Data = new byte[32] }));
+            Assert.Throws<ArgumentNullException>(() => new WsqEncoder().EncodeGdi(null));
+            Assert.Throws<ArgumentNullException>(() => new WsqDecoder().DecodeGdi(null));
+            Assert.Throws<ArgumentNullException>(() => new WsqDecoder().Decode(Array.Empty<byte>()));
+
+            using var color = new Bitmap(4, 4, PixelFormat.Format24bppRgb);
+            Assert.Throws<ArgumentException>(() => Conversions.GdiImageToImageInfo(color)); // not 8 bpp
+        }
+
+        [Fact]
+        public void ImageInfoToGdiImage_SetsResolutionOrFallsBackTo96Dpi()
+        {
+            var info = new RawImageData { Width = 4, Height = 4, PixelDepth = 8, Resolution = 500, Data = new byte[16] };
+            using var withResolution = Conversions.ImageInfoToGdiImage(info);
+            Assert.Equal(500f, withResolution.HorizontalResolution);
+
+            info.Resolution = 0;
+            using var withoutResolution = Conversions.ImageInfoToGdiImage(info);
+            Assert.Equal(96f, withoutResolution.HorizontalResolution);
         }
 
         [Fact]
