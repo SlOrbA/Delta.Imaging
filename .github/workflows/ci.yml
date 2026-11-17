@@ -6,7 +6,11 @@ name: CI
 #   lint (ubuntu, seconds)  →  build-dll (windows)  →  test (windows)
 #   - actionlint               - MSVC build against     - build + xUnit tests
 #   - committed NBIS libs        committed NBIS libs     - coverage → SonarCloud
-#     complete & CRT-clean     - DLL dependency check
+#     complete & CRT-clean     - DLL dependency check   - Debug and 32-bit runs
+#                           →  build-all (windows, parallel to the above)
+#                              - build.cmd: whole Delta.Wsq.sln, 4 configurations
+#                              - Delta.ImageRenameTool.sln
+#                              - release version stamping
 #
 # The full NBIS source build lives in build-nbis-dll.yml (PRs touching it,
 # weekly, on demand); releases are handled by release.yml.
@@ -65,6 +69,47 @@ jobs:
     uses: ./.github/workflows/build-nbis-dll.yml
     with:
       libs: committed
+
+  # ── Stage 2 (parallel): everything else must at least compile ─────────────
+  # The test job only builds Delta.Wsq and its tests. This job builds what
+  # developers and releases build, so those cannot rot unnoticed.
+  build-all:
+    name: Build all projects
+    needs: lint
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2.0.0
+
+      # The script developers use: native DLLs, library, Paint.NET plugin,
+      # test application and tests, Debug + Release, Win32 + x64.
+      - name: Delta.Wsq.sln via build.cmd
+        shell: cmd
+        run: Delta.Wsq\build.cmd
+
+      - name: Delta.ImageRenameTool.sln
+        run: dotnet build Delta.ImageRenameTool/Delta.ImageRenameTool.sln --configuration Release
+
+      # release.yml stamps the library with the version of the release tag.
+      - name: Version stamping of Delta.Wsq.dll
+        shell: pwsh
+        run: |
+          dotnet build Delta.Wsq/Delta.Wsq/Delta.Wsq.csproj --configuration Release -p:Version=9.8.7 -o "$env:RUNNER_TEMP\versioned"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $version = [Reflection.AssemblyName]::GetAssemblyName("$env:RUNNER_TEMP\versioned\Delta.Wsq.dll").Version
+          Write-Host "Assembly version: $version"
+          if ("$version" -ne '9.8.7.0') {
+            Write-Host "::error::Delta.Wsq.dll has version $version, expected 9.8.7.0"
+            exit 1
+          }
 
   # ── Stage 3: tests + code analysis ─────────────────────────────────────────
   # One job: the SonarScanner has to wrap the build and consume the coverage
@@ -171,6 +216,26 @@ jobs:
       # this build is not part of the analysis.
       - name: Run tests (Debug configuration)
         run: dotnet test ${{ env.TEST_PROJECT }} --configuration Debug --no-restore
+
+      # The hosted runner only has the 64-bit .NET runtime. Install the 32-bit
+      # runtimes side by side and run the suite against nbis32.dll: x86 has
+      # its own calling conventions and pointer size.
+      - name: Run tests as a 32-bit process
+        shell: pwsh
+        env:
+          DELTA_WSQ_EXPECTED_BITNESS: "32"
+        run: |
+          $x86 = Join-Path $env:RUNNER_TEMP 'dotnet-x86'
+          $installer = Join-Path $env:RUNNER_TEMP 'dotnet-install.ps1'
+          Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile $installer
+          foreach ($runtime in 'dotnet', 'windowsdesktop') {
+            & $installer -Architecture x86 -Channel 8.0 -Runtime $runtime -InstallDir $x86
+          }
+          # Where the 32-bit test host looks for its runtime.
+          ${env:DOTNET_ROOT(x86)} = $x86
+          $env:DOTNET_ROOT_X86 = $x86
+          dotnet test $env:TEST_PROJECT --configuration Release --arch x86
+          exit $LASTEXITCODE
 
       - name: Publish test results
         uses: dorny/test-reporter@d61b558e8df85cb60d09ca3e5b09653b4477cea7 # v1

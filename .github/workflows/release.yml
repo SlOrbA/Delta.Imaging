@@ -1,7 +1,13 @@
 name: Release
 
-# Builds nbis32.dll / nbis64.dll and the NBIS static libraries for a new
-# GitHub Release and attaches them as release assets.
+# Builds the release assets for a new GitHub Release and attaches them:
+#   nbis32.dll, nbis64.dll        native codec DLLs
+#   Delta.Wsq-<version>.zip       the .NET library (versioned from the tag)
+#                                 together with both native DLLs
+#   nbis-lib32.zip, nbis-lib64.zip  NBIS static libraries
+#
+# A manual run with dry_run builds and packages everything but uploads the
+# result as a workflow artifact instead of touching the release.
 on:
   release:
     types: [created]
@@ -10,6 +16,10 @@ on:
       tag:
         description: "Existing release tag to (re)attach assets to, e.g. v1.3.1"
         required: true
+      dry_run:
+        description: "Build and package only; do not modify the release"
+        type: boolean
+        default: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -28,9 +38,49 @@ jobs:
       # Manual runs start from the default branch: build the requested tag.
       ref: ${{ inputs.tag }}
 
+  # The .NET library, stamped with the version of the release tag (vX.Y.Z).
+  build-managed:
+    name: Build Delta.Wsq.dll
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v(\d+\.\d+\.\d+)$') {
+            Write-Host "::error::Release tag '$env:RELEASE_TAG' is not of the form vX.Y.Z"
+            exit 1
+          }
+          $version = $Matches[1]
+          dotnet build Delta.Wsq/Delta.Wsq/Delta.Wsq.csproj --configuration Release "-p:Version=$version" -o managed
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Set-Content managed/VERSION $version -NoNewline
+
+      - name: Upload library artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: delta-wsq-managed
+          path: |
+            managed/Delta.Wsq.dll
+            managed/Delta.Wsq.pdb
+            managed/VERSION
+          if-no-files-found: error
+          retention-days: 30
+
   attach:
     name: Attach assets to release
-    needs: build
+    needs: [build, build-managed]
     runs-on: ubuntu-latest
     # Only this job may modify the release.
     permissions:
@@ -42,18 +92,32 @@ jobs:
         with:
           path: artifacts
 
-      - name: Package static libraries
+      - name: Package assets
         run: |
-          (cd artifacts/nbis-static-libs/lib32 && zip -q -X "$GITHUB_WORKSPACE/nbis-lib32.zip" ./*.a)
-          (cd artifacts/nbis-static-libs/lib64 && zip -q -X "$GITHUB_WORKSPACE/nbis-lib64.zip" ./*.a)
-          ls -l nbis-lib32.zip nbis-lib64.zip artifacts/nbis-dll/*/*.dll
+          mkdir assets
+          cp artifacts/nbis-dll/Win32/nbis32.dll artifacts/nbis-dll/x64/nbis64.dll assets/
+          (cd artifacts/nbis-static-libs/lib32 && zip -q -X "$GITHUB_WORKSPACE/assets/nbis-lib32.zip" ./*.a)
+          (cd artifacts/nbis-static-libs/lib64 && zip -q -X "$GITHUB_WORKSPACE/assets/nbis-lib64.zip" ./*.a)
+          # Library + both native DLLs: everything an application needs.
+          version=$(cat artifacts/delta-wsq-managed/VERSION)
+          zip -q -X -j "assets/Delta.Wsq-$version.zip" \
+            artifacts/delta-wsq-managed/Delta.Wsq.dll \
+            artifacts/delta-wsq-managed/Delta.Wsq.pdb \
+            assets/nbis32.dll assets/nbis64.dll
+          ls -l assets
+          unzip -l "assets/Delta.Wsq-$version.zip"
 
       - name: Attach to GitHub Release
+        if: ${{ !inputs.dry_run }}
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ github.event.release.tag_name || inputs.tag }}
-          files: |
-            artifacts/nbis-dll/Win32/nbis32.dll
-            artifacts/nbis-dll/x64/nbis64.dll
-            nbis-lib32.zip
-            nbis-lib64.zip
+          files: assets/*
+
+      - name: Upload assets as workflow artifact (dry run)
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-dry-run
+          path: assets/
+          retention-days: 7
