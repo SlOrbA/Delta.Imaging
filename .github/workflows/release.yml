@@ -72,9 +72,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: delta-wsq-managed
-          # Delta.Wsq.dll, .pdb and .xml (XML documentation)
           path: |
-            managed/Delta.Wsq.*
+            managed/Delta.Wsq.dll
+            managed/Delta.Wsq.pdb
+            managed/Delta.Wsq.xml
             managed/VERSION
           if-no-files-found: error
           retention-days: 30
@@ -102,10 +103,11 @@ jobs:
           # Library (with PDB and XML documentation) + both native DLLs:
           # everything an application needs.
           version=$(cat artifacts/delta-wsq-managed/VERSION)
-          test -f artifacts/delta-wsq-managed/Delta.Wsq.dll
-          zip -q -X -j "assets/Delta.Wsq-$version.zip" \
-            artifacts/delta-wsq-managed/Delta.Wsq.* \
-            assets/nbis32.dll assets/nbis64.dll
+          managed=artifacts/delta-wsq-managed
+          files=("$managed/Delta.Wsq.dll" "$managed/Delta.Wsq.pdb")
+          # Tags older than the XML documentation have no Delta.Wsq.xml.
+          if [ -f "$managed/Delta.Wsq.xml" ]; then files+=("$managed/Delta.Wsq.xml"); fi
+          zip -q -X -j "assets/Delta.Wsq-$version.zip" "${files[@]}" assets/nbis32.dll assets/nbis64.dll
           ls -l assets
           unzip -l "assets/Delta.Wsq-$version.zip"
 
