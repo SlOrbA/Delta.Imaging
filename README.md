@@ -43,6 +43,11 @@ foreach (var comment in comments)
     Console.WriteLine(comment);
 ```
 
+### Limitations
+
+- Images must be 8 bits per pixel grayscale and at least 33 x 33 pixels (`WsqCodec.Constants.MinImageSize`).
+- The header of a WSQ file is validated before decoding, but the NBIS decoder is not hardened against deliberately corrupted image data. Do not decode untrusted files in a process that must not crash.
+
 ### Thread safety
 
 The underlying NBIS implementation keeps its state in global variables. `Delta.Wsq` therefore serializes all calls into the native DLL: the API can be used from several threads, but encoding and decoding run one at a time per process.

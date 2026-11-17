@@ -13,8 +13,9 @@ namespace Delta.Wsq
         /// <param name="bitrate">The bit rate (in bits per pixels).</param>
         /// <param name="comment">An optional comment that is added to the WSQ image.</param>
         /// <returns>WSQ Encoded image; an empty array if <paramref name="image"/> is null or empty.</returns>
-        /// <exception cref="ArgumentException">The image is not 8 bits per pixel, its dimensions
-        /// are not positive, or it holds less data than its dimensions require.</exception>
+        /// <exception cref="ArgumentException">The image is not 8 bits per pixel, is smaller than
+        /// <see cref="Constants.MinImageSize"/> in either dimension, or holds less data than its
+        /// dimensions require.</exception>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="bitrate"/> is not a
         /// positive finite number.</exception>
         public static byte[] Encode(RawImageData image, float bitrate, string comment)
@@ -27,6 +28,10 @@ namespace Delta.Wsq
             if (image.Width <= 0 || image.Height <= 0)
                 throw new ArgumentException(string.Format(
                     "Image dimensions must be positive (got {0} x {1}).", image.Width, image.Height), nameof(image));
+            if (image.Width < Constants.MinImageSize || image.Height < Constants.MinImageSize)
+                throw new ArgumentException(string.Format(
+                    "Images smaller than {0} x {0} pixels cannot be WSQ encoded (got {1} x {2}).",
+                    Constants.MinImageSize, image.Width, image.Height), nameof(image));
             if (image.PixelDepth != 8)
                 throw new ArgumentException(string.Format(
                     "Only 8 bits per pixel images are supported (got {0}).", image.PixelDepth), nameof(image));

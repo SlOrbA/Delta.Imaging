@@ -151,13 +151,15 @@ namespace Delta.Wsq.Tests
         [Fact]
         public void Encode_VerySmallImage_Succeeds()
         {
-            // 32x32 small valid fingerprint
-            var raw = MakeSyntheticImage(32, 32);
+            // The smallest size the codec supports
+            const int size = WsqCodec.Constants.MinImageSize;
+            var raw = MakeSyntheticImage(size, size);
 
             var wsq = WsqCodec.Encode(raw, 0.75f, null);
+            var decoded = WsqCodec.Decode(wsq);
 
-            Assert.NotNull(wsq);
-            Assert.NotEmpty(wsq);
+            Assert.Equal(size, decoded.Width);
+            Assert.Equal(size, decoded.Height);
         }
 
         [Fact]
