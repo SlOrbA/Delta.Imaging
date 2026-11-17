@@ -41,15 +41,20 @@ System.Drawing.Bitmap gdi = decoder.DecodeGdi(wsq);
 System.Windows.Media.Imaging.BitmapSource wpf = decoder.DecodeWpf(wsq);
 ```
 
-Color images are converted to grayscale (average of the channels) unless `autoConvertToGrayscale`
-is `false`. The amount of compression can be given as a bit rate (0.75 is the FBI default, about
-15:1), a compression ratio or a quality percentage.
+Color images are converted to grayscale (average of the channels). With
+`autoConvertToGrayscale: false`, `EncodeGdi` accepts only 8 bpp indexed bitmaps and throws
+`ArgumentException` for anything else; the WPF methods convert color input either way. The
+amount of compression can be given as a bit rate (0.75 is the FBI default, about 15:1), a
+compression ratio or a quality percentage.
 
 ## Limitations
 
 - 8 bits per pixel grayscale only; images must be at least 33 x 33 pixels
   (`WsqCodec.Constants.MinImageSize`).
-- `Decode` and `GetComments` return an empty result for data they cannot read; they do not throw.
+- `WsqCodec.Decode` and `WsqCodec.GetComments` return an empty result (`RawImageData.IsEmpty`,
+  an empty array) for data they cannot read; they do not throw. `WsqDecoder` throws instead:
+  `ArgumentNullException` for null or empty input, and `DecodeGdi` / `DecodeWpf` throw
+  `ArgumentException` when the data cannot be decoded.
 - Calls into the native codec are serialized: the API is safe to use from several threads, but
   encoding and decoding run one at a time per process.
 - The header of a WSQ file is validated before decoding, but the NBIS decoder is not hardened

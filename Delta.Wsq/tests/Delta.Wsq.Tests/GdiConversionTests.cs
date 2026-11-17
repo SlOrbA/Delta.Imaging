@@ -62,6 +62,25 @@ namespace Delta.Wsq.Tests
             Assert.Throws<ArgumentException>(() => Conversions.GdiImageToImageInfo(color)); // not 8 bpp
         }
 
+        // Documented in Delta.Wsq/README.md.
+        [Fact]
+        public void WsqDecoder_UndecodableData_Throws()
+        {
+            var garbage = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+
+            Assert.True(new WsqDecoder().Decode(garbage).IsEmpty);
+            Assert.Throws<ArgumentException>(() => new WsqDecoder().DecodeGdi(garbage));
+            Assert.Throws<ArgumentException>(() => new WsqDecoder().DecodeWpf(garbage));
+        }
+
+        [Fact]
+        public void EncodeGdi_ColorBitmapWithoutConversion_Throws()
+        {
+            using var color = MakeColorBitmap();
+
+            Assert.Throws<ArgumentException>(() => new WsqEncoder().EncodeGdi(color, autoConvertToGrayscale: false));
+        }
+
         [Fact]
         public void ImageInfoToGdiImage_SetsResolutionOrFallsBackTo96Dpi()
         {
