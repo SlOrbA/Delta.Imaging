@@ -71,4 +71,4 @@ extern "C"
 
 // Structural check of the WSQ marker segments up to the first block, done
 // before handing the data to NBIS (see nistwsq.cpp). Not exported.
-int wsq_validate_stream(const unsigned char* data, int length, int min_image_size);
+int wsq_validate_stream(const unsigned char* data, int length, bool for_decode);

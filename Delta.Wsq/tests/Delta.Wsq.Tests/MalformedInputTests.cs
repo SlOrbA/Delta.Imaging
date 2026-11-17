@@ -12,6 +12,7 @@ namespace Delta.Wsq.Tests
     public class MalformedInputTests
     {
         private const int DttMarker = 0xFFA4;   // transform table
+        private const int DqtMarker = 0xFFA5;   // quantization table
         private const int DhtMarker = 0xFFA6;   // Huffman table
         private const int SofMarker = 0xFFA2;   // frame header
         private const int SobMarker = 0xFFA3;   // start of block
@@ -87,9 +88,11 @@ namespace Delta.Wsq.Tests
         public void Decode_TruncatedAnywhereInTheHeaders_ReturnsEmpty()
         {
             var wsq = LoadSample("fp.wsq");
-            var headersEnd = FindSegment(wsq, SobMarker);
+            // Up to and including the header of the first block (marker,
+            // length, Huffman table id), which then has no data.
+            var headersEnd = FindSegment(wsq, SobMarker) + 5;
 
-            for (var length = 1; length < headersEnd; length++)
+            for (var length = 1; length <= headersEnd; length++)
                 Assert.True(WsqCodec.Decode(wsq.Take(length).ToArray()).IsEmpty, $"truncated to {length} bytes");
 
             AssertSampleStillDecodes();
@@ -112,6 +115,31 @@ namespace Delta.Wsq.Tests
             wsq[FindSegment(wsq, DhtMarker) + 4] = 0xFF; // table id
 
             Assert.True(WsqCodec.Decode(wsq).IsEmpty);
+            AssertSampleStillDecodes();
+        }
+
+        [Fact]
+        public void Decode_BlockHuffmanTableIdOutOfRange_ReturnsEmpty()
+        {
+            var wsq = LoadSample("fp.wsq");
+            wsq[FindSegment(wsq, SobMarker) + 4] = 0xFF; // table id of the first block
+
+            Assert.True(WsqCodec.Decode(wsq).IsEmpty);
+            AssertSampleStillDecodes();
+        }
+
+        [Fact]
+        public void Decode_StreamWithoutQuantizationTable_ReturnsEmpty()
+        {
+            // NBIS would silently reuse the table of the previously decoded image.
+            AssertSampleStillDecodes();
+            var wsq = LoadSample("fp.wsq");
+            var start = FindSegment(wsq, DqtMarker);
+            var segmentLength = 2 + ((wsq[start + 2] << 8) | wsq[start + 3]);
+            var withoutTable = wsq.Take(start).Concat(wsq.Skip(start + segmentLength)).ToArray();
+
+            Assert.True(WsqCodec.Decode(withoutTable).IsEmpty);
+            Assert.Equal(2, WsqCodec.GetComments(withoutTable).Length); // comments are still readable
             AssertSampleStillDecodes();
         }
 

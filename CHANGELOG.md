@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- The nbis DLL validates WSQ data before handing it to NBIS: marker segments must lie inside the buffer, transform and Huffman tables must be consistent, and the image must be at least 33 x 33 pixels. Truncated or damaged headers previously made NBIS free memory twice or access memory outside its buffers, after which a later decode of a valid file could crash the process (#14)
+- The nbis DLL validates WSQ data before handing it to NBIS: marker segments must lie inside the buffer, the tables, frame header and first block header must have the structure NBIS assumes, a stream to decode must contain all tables before the first block, and the image must be at least 33 x 33 pixels. Truncated or damaged headers previously made NBIS free memory twice or access memory outside its buffers, after which a later decode of a valid file could crash the process (#14)
 - Images smaller than 33 x 33 pixels are rejected: `WsqCodec.Encode` throws `ArgumentException` (see `WsqCodec.Constants.MinImageSize`), `Decode` returns an empty image. The NBIS wavelet code reads and writes outside its buffers for such images, and the data it produced could not be decoded (#14)
 - `wsq_get_comments` no longer leaks the comments it had collected when the stream turns out to be malformed (#20)
 - The MinGW stdio shims in the nbis DLL forward to the real CRT functions (`vsscanf`, `vfscanf`, `vfprintf`, ...) instead of emulating them by reading 20 arguments that were never passed (#21)

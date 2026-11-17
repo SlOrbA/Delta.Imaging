@@ -11,17 +11,33 @@
 #define WSQ_MAX_HUFFMAN_TABLES 8
 #define WSQ_MAX_HUFFMAN_VALUES 257
 
+// Segment lengths (including the 2-byte length field) of the segments NBIS
+// reads as fixed-size structures.
+#define WSQ_SOF_SEGMENT_LENGTH 17   // black, white, height, width, shift, scale, encoder, software
+#define WSQ_DQT_SEGMENT_LENGTH 389  // bin center + 64 x (quantization bin, zero bin)
+#define WSQ_SOB_SEGMENT_LENGTH 3    // Huffman table id
+
 // NBIS does not defend itself against malformed input: a table segment that
 // is cut short makes it free the same memory twice; a transform table with a
 // zero filter length, a Huffman table id out of range or an image smaller
-// than WSQ_MIN_IMAGE_SIZE make it access memory outside its buffers. This check rejects those streams before
-// NBIS sees them. It walks the marker segments from SOI to the first SOB:
-//   - only known markers, each segment completely inside the buffer
+// than WSQ_MIN_IMAGE_SIZE make it access memory outside its buffers. It reads
+// the fixed-size segments without looking at their length field, and keeps
+// the quantization table of the previous image when a stream has none.
+//
+// This check rejects such streams before NBIS sees them. It walks the marker
+// segments from SOI to the first SOB:
+//   - only markers NBIS accepts there, each segment completely inside the buffer
 //   - transform table (DTT): non-zero filter lengths that match the segment length
+//   - quantization table (DQT) and frame header (SOF): their fixed length
 //   - Huffman tables (DHT): valid table ids, code counts that fit the segment
-//   - frame header (SOF): present, with a large enough image
+//   - block header (SOB): complete, valid Huffman table id
+// With for_decode, the stream must also contain everything a decode needs
+// before the first block: one frame header with a large enough image, and
+// transform, quantization and Huffman tables. Without it (reading comments)
+// the restart table marker (DRT), which the NBIS decoder rejects, is allowed.
+//
 // It does not make decoding of arbitrary corrupted data safe.
-int wsq_validate_stream(const unsigned char* data, int length, int min_image_size)
+int wsq_validate_stream(const unsigned char* data, int length, bool for_decode)
 {
 	if (data == nullptr || length < 4)
 		return WSQ_ERR_INVALID_ARGUMENT;
@@ -29,6 +45,9 @@ int wsq_validate_stream(const unsigned char* data, int length, int min_image_siz
 		return WSQ_ERR_MALFORMED_STREAM;
 
 	bool frame_header_seen = false;
+	bool dtt_seen = false;
+	bool dqt_seen = false;
+	bool dht_seen = false;
 	int pos = 2;
 	for (;;)
 	{
@@ -40,15 +59,23 @@ int wsq_validate_stream(const unsigned char* data, int length, int min_image_siz
 		const unsigned char* segment = data + pos + 4; // first byte after the length
 		pos += 2;
 
-		if (marker == SOB_WSQ)
-			return frame_header_seen ? 0 : WSQ_ERR_MALFORMED_STREAM;
 		if (marker != SOF_WSQ && marker != DTT_WSQ && marker != DQT_WSQ &&
-			marker != DHT_WSQ && marker != COM_WSQ)
+			marker != DHT_WSQ && marker != COM_WSQ && marker != SOB_WSQ &&
+			!(marker == DRT_WSQ && !for_decode))
 			return WSQ_ERR_MALFORMED_STREAM;
 		if (segment_length < 2 || segment_length > length - pos)
 			return WSQ_ERR_MALFORMED_STREAM;
 
-		if (marker == DTT_WSQ)
+		if (marker == SOB_WSQ)
+		{
+			// length, Huffman table id; NBIS indexes a fixed array with the id
+			if (segment_length != WSQ_SOB_SEGMENT_LENGTH || segment[0] >= WSQ_MAX_HUFFMAN_TABLES)
+				return WSQ_ERR_MALFORMED_STREAM;
+			if (for_decode && !(frame_header_seen && dtt_seen && dqt_seen && dht_seen))
+				return WSQ_ERR_MALFORMED_STREAM;
+			return 0;
+		}
+		else if (marker == DTT_WSQ)
 		{
 			// length, high-pass size, low-pass size, then 6 bytes for each
 			// coefficient of the first half of both filters
@@ -59,6 +86,13 @@ int wsq_validate_stream(const unsigned char* data, int length, int min_image_siz
 			if (hisz == 0 || losz == 0 ||
 				segment_length != 4 + 6 * ((hisz + 1) / 2 + (losz + 1) / 2))
 				return WSQ_ERR_MALFORMED_STREAM;
+			dtt_seen = true;
+		}
+		else if (marker == DQT_WSQ)
+		{
+			if (segment_length != WSQ_DQT_SEGMENT_LENGTH)
+				return WSQ_ERR_MALFORMED_STREAM;
+			dqt_seen = true;
 		}
 		else if (marker == DHT_WSQ)
 		{
@@ -77,16 +111,17 @@ int wsq_validate_stream(const unsigned char* data, int length, int min_image_siz
 					return WSQ_ERR_MALFORMED_STREAM;
 				table += 17 + values;
 				left -= 17 + values;
+				dht_seen = true;
 			}
 		}
 		else if (marker == SOF_WSQ)
 		{
-			// length, black, white, height (2), width (2), ...
-			if (segment_length < 8)
+			// length, black, white, height (2), width (2), ...; only one per stream
+			if (frame_header_seen || segment_length != WSQ_SOF_SEGMENT_LENGTH)
 				return WSQ_ERR_MALFORMED_STREAM;
 			const int height = (segment[2] << 8) | segment[3];
 			const int width = (segment[4] << 8) | segment[5];
-			if (width < min_image_size || height < min_image_size)
+			if (for_decode && (width < WSQ_MIN_IMAGE_SIZE || height < WSQ_MIN_IMAGE_SIZE))
 				return WSQ_ERR_IMAGE_TOO_SMALL;
 			frame_header_seen = true;
 		}
@@ -133,11 +168,12 @@ NISTWSQ_API int __cdecl wsq_decode(
 	byte* wsq_data, 
 	int wsq_data_length)
 {
-	if (decompressed_data == nullptr)
+	if (decompressed_data == nullptr || width == nullptr || height == nullptr ||
+		depth == nullptr || pixels_per_inch == nullptr || lossy_flag == nullptr)
 		return WSQ_ERR_INVALID_ARGUMENT;
 	*decompressed_data = nullptr;
 
-	if (int ret = wsq_validate_stream(wsq_data, wsq_data_length, WSQ_MIN_IMAGE_SIZE))
+	if (int ret = wsq_validate_stream(wsq_data, wsq_data_length, true))
 		return ret;
 
 	return wsq_decode_mem(
@@ -165,8 +201,8 @@ NISTWSQ_API int __cdecl wsq_get_comments(
 	*comments_data = nullptr;
 	*comments_count = 0;
 
-	// Comments are metadata: they can be read from any image size.
-	if (int ret = wsq_validate_stream(wsq_data, wsq_data_length, 0))
+	// Comments are metadata: they can be read from streams that cannot be decoded.
+	if (int ret = wsq_validate_stream(wsq_data, wsq_data_length, false))
 		return ret;
 
 	byte* cbufptr = wsq_data;
