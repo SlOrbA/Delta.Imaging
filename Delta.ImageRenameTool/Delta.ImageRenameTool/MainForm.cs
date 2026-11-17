@@ -136,8 +136,10 @@ namespace Delta.ImageRenameTool
             {
                 if (!isCurrent()) return;
                 wpfViewer.LoadImageAsync(data, enableExifRotation, isCurrent);
+                if (!isCurrent()) return; // superseded meanwhile: do not decode the file at all
 
-                var bitmap = ReadBitmap(data.GetFileName());
+                string status;
+                var bitmap = ReadBitmap(data.GetFileName(), out status);
                 pg.Invoke(new Action(() =>
                 {
                     if (!isCurrent())
@@ -147,6 +149,7 @@ namespace Delta.ImageRenameTool
                         return;
                     }
 
+                    statusLabel.Text = status;
                     pg.SelectedObject = bitmap;
                     rtb.Clear();
                     if (data.Exif == null) return;
@@ -159,7 +162,9 @@ namespace Delta.ImageRenameTool
             thread.Start();
         }
 
-        private Bitmap ReadBitmap(string filename)
+        // Called on the preview thread: returns the status text instead of
+        // touching the UI.
+        private static Bitmap ReadBitmap(string filename, out string status)
         {
             Bitmap bitmap = null;
             try
@@ -171,13 +176,12 @@ namespace Delta.ImageRenameTool
                     stream.Close();
                 }
 
-                statusLabel.Text = okStatus;
+                status = okStatus;
             }
             catch (Exception ex)
             {
                 // An error occurred while loading the image file (maybe it does not exist any more...)
-                // Let's make an image indicating the problem.
-                statusLabel.Text = $"Error: {ex.Message}";
+                status = $"Error: {ex.Message}";
             }
 
             return bitmap;
