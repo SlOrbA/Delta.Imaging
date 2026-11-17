@@ -21,7 +21,7 @@ The library requires `nbis32.dll` (32-bit) and `nbis64.dll` (64-bit) in the appl
 
 **DLL Features:**
 - ✅ **No Redistributable dependency** — Built with static CRT (`/MT`)
-- ✅ **KERNEL32.dll and msvcrt.dll only** — Built-in Windows components
+- ✅ **KERNEL32.dll only** — the C runtime is linked statically, nothing else is imported
 - ✅ **Modern toolchain** — MSVC 2022, MinGW-w64 GCC 14+
 - ✅ **Automated builds** — GitHub Actions builds on every release
 

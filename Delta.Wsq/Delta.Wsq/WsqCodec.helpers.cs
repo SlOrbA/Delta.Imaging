@@ -104,11 +104,9 @@ namespace Delta.Wsq
             return (int)Math.Round(qa * cr + qb);
         }
 
-        // We limit the quality to the range [1;98], because;
-        // When quality = 100, the codec fails (memory allocation error)
-        // When quality = 99, strange artifacts appear.
-        // With quality = 98, the image seems correct.
-        //For the same reason, the Compression ratio is clamped to [3;100] 
+        // Quality is clamped to [0;100] and the compression ratio to [3;100]:
+        // a ratio of 1:1 makes the codec fail (memory allocation error) and
+        // 2:1 produces strange artifacts, so quality 100 maps to 3:1.
 
         private static int SafeQuality(int quality)
         {

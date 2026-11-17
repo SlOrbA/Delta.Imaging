@@ -12,6 +12,28 @@ namespace Delta.Wsq
         private const string x86Dll = "nbis32.dll";
         private const string x64Dll = "nbis64.dll";
 
+        /// <summary>
+        /// The native library for a process architecture. There are builds for
+        /// x86 and x64 only; e.g. an ARM64 process cannot load either of them.
+        /// </summary>
+        internal static string GetLibraryName(Architecture architecture)
+        {
+            switch (architecture)
+            {
+                case Architecture.X86: return x86Dll;
+                case Architecture.X64: return x64Dll;
+                default:
+                    throw new PlatformNotSupportedException(string.Format(
+                        "Delta.Wsq has native codec libraries for x86 and x64 processes only; this process is {0}.",
+                        architecture));
+            }
+        }
+
+        private static bool Use64BitLibrary
+        {
+            get { return GetLibraryName(RuntimeInformation.ProcessArchitecture) == x64Dll; }
+        }
+
         // NBIS keeps its codec state in global variables (see nbis/include/wsq.h),
         // so calls into the DLL must never run concurrently.
         private static readonly object nativeLock = new object();
@@ -106,7 +128,7 @@ namespace Delta.Wsq
         {
             lock (nativeLock)
             {
-                return IntPtr.Size == 8 ?
+                return Use64BitLibrary ?
                     wsq_decode64(out outputData, out width, out height, out depth, out dpi, out lossyflag, inputData, inputLength) :
                     wsq_decode32(out outputData, out width, out height, out depth, out dpi, out lossyflag, inputData, inputLength);
             }
@@ -120,7 +142,7 @@ namespace Delta.Wsq
         {
             lock (nativeLock)
             {
-                return IntPtr.Size == 8 ?
+                return Use64BitLibrary ?
                     wsq_get_comments64(out commentData, out commentsCount, inputData, inputLength) :
                     wsq_get_comments32(out commentData, out commentsCount, inputData, inputLength);
             }
@@ -139,7 +161,7 @@ namespace Delta.Wsq
         {
             lock (nativeLock)
             {
-                return IntPtr.Size == 8 ?
+                return Use64BitLibrary ?
                     wsq_encode64(out outputData, out outputLength, bitrate, inputData, width, height, depth, dpi, comment_text) :
                     wsq_encode32(out outputData, out outputLength, bitrate, inputData, width, height, depth, dpi, comment_text);
             }
@@ -149,7 +171,7 @@ namespace Delta.Wsq
         {
             lock (nativeLock)
             {
-                if (IntPtr.Size == 8)
+                if (Use64BitLibrary)
                     free_mem64(data);
                 else free_mem32(data);
             }

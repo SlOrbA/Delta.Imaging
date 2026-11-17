@@ -33,7 +33,6 @@ Delta.Imaging/
 └── Documentation/
     ├── README.md           # Project overview
     ├── CHANGELOG.md        # Version history
-    ├── FUTURE_IMPROVEMENTS.md  # Roadmap
     └── DEVELOPERS.md       # This file
 ```
 

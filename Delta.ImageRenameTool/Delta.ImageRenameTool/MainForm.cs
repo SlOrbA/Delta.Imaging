@@ -16,7 +16,10 @@ namespace Delta.ImageRenameTool
     public partial class MainForm : Form
     {
         private static readonly string okStatus = "OK";
-        private Thread currentPreviewThread = null;
+        // Incremented for every preview request; a preview thread that is no
+        // longer the latest one drops its result. (Thread.Abort is not
+        // supported on .NET.)
+        private int previewGeneration;
         private bool loaded = false;
 
         /// <summary>
@@ -124,11 +127,14 @@ namespace Delta.ImageRenameTool
             if (data == null) return;
             var enableExifRotation = EnableAutoRotatePreview;
 
+            var generation = Interlocked.Increment(ref previewGeneration);
             var thread = new Thread((state) =>
             {
+                if (generation != Volatile.Read(ref previewGeneration)) return;
                 wpfViewer.LoadImageAsync(data, enableExifRotation);
 
                 var bitmap = ReadBitmap(data.GetFileName());
+                if (generation != Volatile.Read(ref previewGeneration)) return;
                 pg.Invoke(new Action(() => pg.SelectedObject = bitmap));
                 rtb.Invoke(new Action(() =>
                 {
@@ -139,10 +145,8 @@ namespace Delta.ImageRenameTool
                 }));
             });
 
-            if (currentPreviewThread != null)
-                currentPreviewThread.Abort();
-            currentPreviewThread = thread;
-            currentPreviewThread.Start();
+            thread.IsBackground = true;
+            thread.Start();
         }
 
         private Bitmap ReadBitmap(string filename)
