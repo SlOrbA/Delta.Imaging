@@ -17,7 +17,7 @@ Imaging libraries and tools, all sharing the [Ms-RL][msrl] license.
 
 ### Using Delta.Wsq
 
-The library requires `nbis32.dll` (32-bit) and `nbis64.dll` (64-bit) in the application directory. Download the latest pre-built DLLs from the [Releases](https://github.com/SlOrbA/Delta.Imaging/releases) page.
+The library requires `nbis32.dll` (32-bit) and `nbis64.dll` (64-bit) in the application directory. Each [release](https://github.com/SlOrbA/Delta.Imaging/releases) has a `Delta.Wsq-<version>.zip` with `Delta.Wsq.dll` and both native DLLs; the native DLLs are also attached separately.
 
 **DLL Features:**
 - ✅ **No Redistributable dependency** — Built with static CRT (`/MT`)
@@ -66,7 +66,7 @@ dotnet build Delta.Wsq/Delta.Wsq/Delta.Wsq.csproj
 
 The DLLs are built from NBIS C source using MSYS2 + MSVC. See [`Delta.Wsq/nbis/BUILDING.md`](Delta.Wsq/nbis/BUILDING.md) for detailed instructions.
 
-[`ci.yml`](.github/workflows/ci.yml) builds them on every PR and push to `master` against the committed NBIS static libraries; [`build-nbis-dll.yml`](.github/workflows/build-nbis-dll.yml) additionally verifies weekly that those libraries can still be rebuilt from source. [`release.yml`](.github/workflows/release.yml) attaches the DLLs and static libraries to GitHub Releases.
+[`ci.yml`](.github/workflows/ci.yml) builds them on every PR and push to `master` against the committed NBIS static libraries; [`build-nbis-dll.yml`](.github/workflows/build-nbis-dll.yml) additionally verifies weekly that those libraries can still be rebuilt from source. [`release.yml`](.github/workflows/release.yml) attaches the DLLs, the versioned .NET library and the static libraries to GitHub Releases.
 
 ## Running tests
 

@@ -1,37 +1,20 @@
 @echo off
+rem Builds every configuration and platform of Delta.Wsq.sln: the native nbis
+rem DLLs and the .NET projects. Run it from a "Developer Command Prompt for
+rem VS 2022" (msbuild and the C++ toolset must be available); the .NET SDK
+rem alone cannot build nbis.vcxproj.
+setlocal
+cd /d "%~dp0"
 
-dotnet build Delta.Wsq.sln --configuration Debug --arch x86
-if %ERRORLEVEL% equ 0 (	
-	echo ***************** Debug/x86 Build succeeded ***************** 
-) else (
-	echo ***************** Debug/x86 Build failed! *****************
-	echo Error level: %ERRORLEVEL%
-	pause
+for %%C in (Debug Release) do (
+	for %%P in (Win32 x64) do (
+		echo ***************** Building %%C / %%P *****************
+		msbuild Delta.Wsq.sln -restore -m -nologo -v:minimal -p:Configuration=%%C -p:Platform=%%P
+		if errorlevel 1 (
+			echo ***************** %%C / %%P build failed! *****************
+			exit /b 1
+		)
+	)
 )
 
-dotnet build Delta.Wsq.sln --configuration Release --arch x86
-if %ERRORLEVEL% equ 0 (	
-	echo ***************** Release/x86 Build succeeded ***************** 
-) else (
-	echo ***************** Release/x86 Build failed! *****************
-	echo Error level: %ERRORLEVEL%
-	pause
-)
-
-dotnet build Delta.Wsq.sln --configuration Debug --arch x64
-if %ERRORLEVEL% equ 0 (	
-	echo ***************** Debug/x64 Build succeeded ***************** 
-) else (
-	echo ***************** Debug/x64 Build failed! *****************
-	echo Error level: %ERRORLEVEL%
-	pause
-)
-
-dotnet build Delta.Wsq.sln --configuration Release --arch x64
-if %ERRORLEVEL% equ 0 (	
-	echo ***************** Release/x64 Build succeeded ***************** 
-) else (
-	echo ***************** Release/x64 Build failed! *****************
-	echo Error level: %ERRORLEVEL%
-	pause
-)
+echo ***************** All builds succeeded *****************

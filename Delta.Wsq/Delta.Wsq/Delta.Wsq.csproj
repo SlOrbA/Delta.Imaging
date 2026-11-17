@@ -4,7 +4,17 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- Local builds are 0.0.0-dev; release.yml sets the version from the
+         release tag (-p:Version=...). -->
+    <Version>0.0.0-dev</Version>
+    <AssemblyTitle>Delta.Wsq</AssemblyTitle>
+    <Description>WSQ Codec</Description>
+    <Company>Delta Software</Company>
+    <Product>Delta.Wsq</Product>
+    <!-- IntelliSense documentation for consumers of the release zip. Not every
+         public member is documented yet (CS1591). -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
     <RootNamespace>Delta.Wsq</RootNamespace>
     <AssemblyName>Delta.Wsq</AssemblyName>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
