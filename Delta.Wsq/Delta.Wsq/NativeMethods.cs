@@ -16,16 +16,20 @@ namespace Delta.Wsq
         private const string x86Dll = dllPrefix + "32" + dllSuffix + ".dll";
         private const string x64Dll = dllPrefix + "64" + dllSuffix + ".dll";
 
+        // The nbis DLL exports are __cdecl (see nbis/nistwsq.h). DllImport defaults
+        // to StdCall, which on x86 leaves the arguments on the stack after every
+        // call (PInvokeStackImbalance). On x64 there is only one convention.
+
         #region x86
 
-        [DllImport(x86Dll, EntryPoint = "wsq_get_comments")]
+        [DllImport(x86Dll, EntryPoint = "wsq_get_comments", CallingConvention = CallingConvention.Cdecl)]
         private static extern int wsq_get_comments32(
             out IntPtr commentData,
             out int commentsCount,
             IntPtr inputData,
             int inputLength);
 
-        [DllImport(x86Dll, EntryPoint = "wsq_decode")]
+        [DllImport(x86Dll, EntryPoint = "wsq_decode", CallingConvention = CallingConvention.Cdecl)]
         private static extern int wsq_decode32(
             out IntPtr outputData,
             out int width,
@@ -36,7 +40,7 @@ namespace Delta.Wsq
             IntPtr inputData,
             int inputLength);
 
-        [DllImport(x86Dll, EntryPoint = "wsq_encode")]
+        [DllImport(x86Dll, EntryPoint = "wsq_encode", CallingConvention = CallingConvention.Cdecl)]
         private static extern int wsq_encode32(
             out IntPtr outputData,
             out int outputLength,
@@ -48,21 +52,21 @@ namespace Delta.Wsq
             int dpi,
             string comment_text);
 
-        [DllImport(x86Dll, EntryPoint = "free_mem")]
+        [DllImport(x86Dll, EntryPoint = "free_mem", CallingConvention = CallingConvention.Cdecl)]
         private static extern void free_mem32(IntPtr data);
 
         #endregion
 
         #region x64
 
-        [DllImport(x64Dll, EntryPoint = "wsq_get_comments")]
+        [DllImport(x64Dll, EntryPoint = "wsq_get_comments", CallingConvention = CallingConvention.Cdecl)]
         private static extern int wsq_get_comments64(
             out IntPtr commentData,
             out int commentsCount,
             IntPtr inputData,
             int inputLength);
 
-        [DllImport(x64Dll, EntryPoint = "wsq_decode")]
+        [DllImport(x64Dll, EntryPoint = "wsq_decode", CallingConvention = CallingConvention.Cdecl)]
         private static extern int wsq_decode64(
             out IntPtr outputData,
             out int width,
@@ -73,7 +77,7 @@ namespace Delta.Wsq
             IntPtr inputData,
             int inputLength);
 
-        [DllImport(x64Dll, EntryPoint = "wsq_encode")]
+        [DllImport(x64Dll, EntryPoint = "wsq_encode", CallingConvention = CallingConvention.Cdecl)]
         private static extern int wsq_encode64(
             out IntPtr outputData,
             out int outputLength,
@@ -85,7 +89,7 @@ namespace Delta.Wsq
             int dpi,
             string comment_text);
 
-        [DllImport(x64Dll, EntryPoint = "free_mem")]
+        [DllImport(x64Dll, EntryPoint = "free_mem", CallingConvention = CallingConvention.Cdecl)]
         private static extern void free_mem64(IntPtr data);
 
         #endregion

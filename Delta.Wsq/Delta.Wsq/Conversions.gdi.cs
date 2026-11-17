@@ -128,21 +128,19 @@ namespace Delta.Wsq
 
                 try
                 {
-                    var inputStride = bitmapData.Stride;
-                    var inputScan0 = (int)bitmapData.Scan0;
-                    var inputGarbage = inputStride - w * 3;
+                    // Pointer arithmetic, not (int)Scan0: on 64-bit the bitmap
+                    // buffers can live above 2 GB, where an int cannot hold the
+                    // address (OverflowException on .NET Framework, a truncated
+                    // pointer and an access violation on .NET).
+                    var inputScan0 = (byte*)bitmapData.Scan0;
+                    var outputScan0 = (byte*)resultData.Scan0;
 
-                    var outputStride = resultData.Stride;
-                    var outputScan0 = (int)resultData.Scan0;
-                    var outputGarbage = outputStride - w;
-
-                    for (var i = 0; i < w * h; i++)
+                    for (var y = 0; y < h; y++)
                     {
-                        var iy = inputStride > 0 ? i / w : h - i / w;
-                        var oy = outputStride > 0 ? i / w : h - i / w;
-                        var pixptr = (byte*)(inputScan0 + i * 3 + iy * inputGarbage);
-                        var resptr = (byte*)(outputScan0 + i + oy * outputGarbage);
-                        *resptr = (byte)((pixptr[0] + pixptr[1] + pixptr[2]) / 3);
+                        var pixptr = inputScan0 + y * bitmapData.Stride;
+                        var resptr = outputScan0 + y * resultData.Stride;
+                        for (var x = 0; x < w; x++, pixptr += 3)
+                            resptr[x] = (byte)((pixptr[0] + pixptr[1] + pixptr[2]) / 3);
                     }
                 }
                 finally
