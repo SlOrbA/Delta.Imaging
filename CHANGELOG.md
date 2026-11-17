@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - 32-bit processes: the P/Invoke declarations in `NativeMethods` now use `CallingConvention.Cdecl`, matching the `__cdecl` exports of the nbis DLL. The default (StdCall) left the arguments on the stack after every call, reported by the debugger as `PInvokeStackImbalance`
 - 64-bit processes: `Conversions.To8bppBitmap` (used by `WsqEncoder.EncodeGdi` with `autoConvertToGrayscale`) no longer casts bitmap pointers to `int`, which threw `OverflowException` on .NET Framework and crashed with an access violation on .NET when the bitmap buffer was above 2 GB
+- `Conversions.GdiImageToImageInfo` / `ImageInfoToGdiImage` (and therefore `WsqEncoder.EncodeGdi` / `WsqDecoder.DecodeGdi`) threw `EntryPointNotFoundException`: they P/Invoked `CopyMemory` from `kernel32.dll`, which is only a macro in the Windows headers and not an exported function. Rows are now copied with `Buffer.MemoryCopy`
 
 ### Changed
 - nbis DLL no longer prints NBIS debug/progress messages to stderr on every encode/decode (`int debug = 0` in `mingw_shim.cpp`). Console applications and services hosting the DLL see less output; genuine NBIS error messages are still printed (#11)

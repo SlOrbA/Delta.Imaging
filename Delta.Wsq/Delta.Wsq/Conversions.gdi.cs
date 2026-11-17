@@ -32,7 +32,7 @@ namespace Delta.Wsq
                     var dest = (byte*)bmpData.Scan0;
                     for (int i = 0; i < h; i++)
                     {
-                        NativeMethods.CopyMemory(dest, source, w * mul);
+                        Buffer.MemoryCopy(source, dest, w * mul, w * mul);
                         dest += bmpData.Stride;
                         source += w * mul;
                     }
@@ -87,7 +87,7 @@ namespace Delta.Wsq
                     var source = (byte*)bmpData.Scan0;
                     for (int i = 0; i < h; i++)
                     {
-                        NativeMethods.CopyMemory(dest, source, w * mul);
+                        Buffer.MemoryCopy(source, dest, w * mul, w * mul);
                         dest += w * mul;
                         source += bmpData.Stride;
                     }

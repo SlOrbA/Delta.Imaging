@@ -94,13 +94,6 @@ namespace Delta.Wsq
 
         #endregion
 
-        #region Windows API
-
-        [DllImport("kernel32.dll")]
-        public static extern unsafe void CopyMemory(void* destination, void* source, int length);
-
-        #endregion
-
         public static int wsq_decode(
             out IntPtr outputData,
             out int width,
