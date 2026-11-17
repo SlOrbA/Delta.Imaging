@@ -6,9 +6,10 @@ namespace Delta.Wsq.Tests
 {
     public class GdiConversionTests
     {
-        // Odd width: the 24bpp and 8bpp scanlines both carry padding bytes.
-        private const int Width = 37;
-        private const int Height = 21;
+        // Odd width: the 24bpp (765 → 768) and 8bpp (255 → 256) scanlines both
+        // carry padding bytes. Large enough for the NBIS WSQ codec.
+        private const int Width = 255;
+        private const int Height = 200;
 
         private static readonly Color Left = Color.FromArgb(30, 60, 90);     // gray 60
         private static readonly Color Right = Color.FromArgb(200, 210, 250); // gray 220
