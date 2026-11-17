@@ -11,7 +11,7 @@ A .NET WSQ (Wavelet Scalar Quantization, the fingerprint image format) encoder/d
 - `nbis32.dll` and `nbis64.dll` next to the application; the one matching the process is loaded.
   They need no Visual C++ Redistributable.
 
-[Releases](https://github.com/SlOrbA/Delta.Imaging/releases) newer than v1.3.3 have a
+[Releases](https://github.com/SlOrbA/Delta.Imaging/releases) from v1.4.0 on have a
 `Delta.Wsq-<version>.zip` with the library and both native DLLs. Releases up to v1.3.3 contain
 the native DLLs only; for those, build the library from source (see [Building](#building)).
 
