@@ -44,9 +44,10 @@ The fix has two parts:
 
 ### Part 1 — Rebuild `.a` files with MSYS2 + modern MinGW-w64
 
-Modern MinGW-w64 (available via [MSYS2](https://www.msys2.org/)) links against `msvcrt.dll`
-(a Windows system DLL, always present, no redistribution needed) instead of `msvcr100.dll`.
-This eliminates the VS 2010 dependency.
+Libraries built with modern MinGW-w64 (available via [MSYS2](https://www.msys2.org/)) no longer
+reference the `msvcr100.dll`-specific `__imp___iob`. The CRT functions they call (`malloc`,
+`fprintf`, ...) are resolved by the MSVC linker when the DLL is linked. This eliminates the
+VS 2010 dependency.
 
 ### Part 2 — Static MSVC CRT (`/MT`) + complete shims
 
@@ -54,8 +55,8 @@ The MSVC project uses `/MT` (static C runtime) for Release builds, eliminating t
 on `vcruntime140.dll` (VS 2022 redistributable). The `mingw_shim.cpp` was updated to cover
 all MinGW runtime functions referenced by the new `.a` files.
 
-**Result:** The DLL depends only on `KERNEL32.dll` and `msvcrt.dll` — both Windows system
-components present on every modern Windows installation. No redistributable package required.
+**Result:** The DLL imports `KERNEL32.dll` only. The C runtime is inside the DLL, so no
+redistributable package is required.
 
 ---
 
@@ -159,13 +160,13 @@ dumpbin /dependents bin\Release\Win32\nbis32.dll
 dumpbin /dependents bin\Release\x64\nbis64.dll
 ```
 
-Expected output — only these two:
+Expected output — a single dependency:
 ```
 KERNEL32.dll
-msvcrt.dll
 ```
 
-If `msvcr100.dll`, `vcruntime140.dll`, or any other CRT DLL appears, the build is not clean.
+If `msvcr100.dll`, `vcruntime140.dll`, `msvcrt.dll` or any other CRT DLL appears, the build is
+not clean.
 
 ---
 
@@ -177,6 +178,7 @@ If `msvcr100.dll`, `vcruntime140.dll`, or any other CRT DLL appears, the build i
   inspect and adapt the generated `Makefile.config` as needed.
 - The `mingw_shim.cpp` bridges `__mingw_*` printf/scanf variants. If a future MinGW toolchain
   adds or renames functions, add corresponding shims there.
-- Using `/MT` (static CRT) means the MSVC-compiled code and the MinGW-compiled code each have
-  their own CRT instance. This is safe here because all memory allocated internally by the NBIS
-  libraries is freed through the exported `free_mem()` function, which calls the correct `free()`.
+- With `/MT` (static CRT) the MSVC-compiled wrapper and the MinGW-compiled NBIS objects are
+  linked against the same CRT inside the DLL, so they share one heap. That CRT is separate
+  from the CRT of the calling application, which is why memory returned by the DLL must be
+  released with the exported `free_mem()` function and never with the caller's own `free()`.

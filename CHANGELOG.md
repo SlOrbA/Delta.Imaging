@@ -27,14 +27,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Conversions.GdiImageToImageInfo` / `ImageInfoToGdiImage` (and therefore `WsqEncoder.EncodeGdi` / `WsqDecoder.DecodeGdi`) threw `EntryPointNotFoundException`: they P/Invoked `CopyMemory` from `kernel32.dll`, which is only a macro in the Windows headers and not an exported function. Rows are now copied with `Buffer.MemoryCopy`
 
 ### Changed
+- `Conversions.WpfImageToImageInfo` and `ToGray8BitmapSource` convert `Indexed8` images through their palette colors instead of using the palette indexes as gray levels (#30)
+- A process that is neither x86 nor x64 (e.g. ARM64) gets a `PlatformNotSupportedException` that says so, instead of a `BadImageFormatException` from loading the x64 DLL (#25)
+- Null arguments are reported with `ArgumentNullException` (a subclass of the `ArgumentException` thrown before) (#28)
+- Delta.ImageRenameTool: selecting another image while a preview is loading no longer calls `Thread.Abort`, which throws on .NET (#28)
+
+### Removed
+- `IMPROVEMENTS.md` and `FUTURE_IMPROVEMENTS.md`: mostly completed work; planning now happens in GitHub issues (#27)
+
+## [1.3.3] - 2026-11-16
+
+### Changed
 - nbis DLL no longer prints NBIS debug/progress messages to stderr on every encode/decode (`int debug = 0` in `mingw_shim.cpp`). Console applications and services hosting the DLL see less output; genuine NBIS error messages are still printed (#11)
+- CI fails if NBIS debug output reappears (#12)
+
+## [1.3.2] - 2026-11-16
+
+### Fixed
+- `Debug|Win32` build of `nbis.vcxproj`: the Debug configurations use the static debug CRT (`/MTd`) like Release (`/MT`). The build failed with `LNK2019: unresolved external symbol _sqrtf` (#10)
+- Test coverage is collected (Coverlet, OpenCover) and reported to SonarCloud (#9)
+
+### Changed
+- Fail-early CI pipeline (`ci.yml`): lint, DLL build, then tests and SonarCloud, one build per commit (#9)
+- All four configurations of `nbis.vcxproj` are built in CI (#10)
+- Release assets are built and attached by `release.yml` (#9)
+
+## [1.3.1] - 2026-11-16
+
+### Fixed
+- The NBIS static libraries in `Delta.Wsq/nbis/lib32` and `lib64` were still the 2013 MinGW GCC 4.5.2 builds, which reference `__imp___iob` (`msvcr100.dll`) and caused `LNK2001` errors in local builds. They are replaced with the MinGW-w64 builds produced by CI (#8)
+- `nbis.rc` includes `winres.h` instead of the MFC header `afxres.h`, which is not available on current GitHub runners and broke the v1.3.0 release build (#8)
 
 ### Added
-- Extended test coverage: edge cases, parametrized tests, corruption handling
+- The NBIS static libraries are published: as the `nbis-static-libs` workflow artifact and as `nbis-lib32.zip` / `nbis-lib64.zip` on every release (#8)
+
+## [1.3.0] - 2026-05-29
+
+### Added
+- SonarCloud code analysis
+- Extended test coverage: edge cases, parametrized tests, corruption handling (18 tests)
 - GitHub Actions Node.js 24 support (Node.js 20 deprecated)
 - Documentation: CHANGELOG.md, DEVELOPERS.md, improved README
-- Development guidelines: CONTRIBUTING.md, PR template
-- Future roadmap: FUTURE_IMPROVEMENTS.md
+- Development guidelines: CONTRIBUTING.md, PR template, EditorConfig
 
 ## [1.2.0] - 2026-05-29
 
@@ -92,28 +126,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History Summary
 
-| Version | Date | Status | Notable Changes |
-|---------|------|--------|-----------------|
-| 1.2.0 | 2026-05-29 | Released | Full automation, modern MinGW-w64, no CRT dependency |
-| 1.1.0 | 2026-05-29 | Released | xUnit tests added |
-| 1.0.0 | 2026-05-28 | Released | Initial release |
+| Version | Date | Notable Changes |
+|---------|------|-----------------|
+| 1.3.3 | 2026-11-16 | NBIS debug output disabled |
+| 1.3.2 | 2026-11-16 | Debug builds fixed, fail-early CI, release workflow |
+| 1.3.1 | 2026-11-16 | Modern NBIS static libraries committed and published |
+| 1.3.0 | 2026-05-29 | SonarCloud, more tests, developer documentation |
+| 1.2.0 | 2026-05-29 | Automated DLL builds, modern MinGW-w64, no CRT dependency |
+| 1.1.0 | 2026-05-29 | xUnit tests added |
+| 1.0.0 | 2026-05-28 | Initial release |
 
-## Upgrade Path
-
-### From 1.0.0 → 1.1.0
-- Automatic: code-only changes, no breaking changes
-- Tests are optional but recommended
+## Upgrade Notes
 
 ### From 1.1.0 → 1.2.0
-- **Breaking change**: None
-- **Recommended**: Use new nbis32.dll/nbis64.dll (v1.2.0+) for static CRT (no Redistributable needed)
-- Old v1.1.0 DLLs still work but require VC++ 2010 Redistributable
+- Use the new nbis32.dll / nbis64.dll (v1.2.0+): static CRT, no Visual C++ Redistributable needed
+- The v1.1.0 DLLs still work but require the VC++ 2010 Redistributable
+
+### From 1.3.x → next release
+- `WsqCodec.Encode` throws `ArgumentException` / `ArgumentOutOfRangeException` for input it previously passed to the native encoder unchecked: images smaller than 33 x 33 pixels, a depth other than 8 bpp, too little pixel data, a non-positive bit rate
+- Debug builds of `Delta.Wsq` load `nbis32.dll` / `nbis64.dll`; `nbis32d.dll` / `nbis64d.dll` are no longer used
+- The version of `Delta.Wsq.dll` follows the release tag (it was 1.1.0.0 in every release so far)
 
 ## Future Plans
 
-See [FUTURE_IMPROVEMENTS.md](./FUTURE_IMPROVEMENTS.md) for:
-- GitHub Actions deprecation management
-- Extended test coverage
-- CI/CD optimization
-- Static analysis integration
-- NuGet package distribution
+Planned work and known problems are tracked as [GitHub issues](https://github.com/SlOrbA/Delta.Imaging/issues).

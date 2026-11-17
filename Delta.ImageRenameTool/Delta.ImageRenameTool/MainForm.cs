@@ -16,7 +16,10 @@ namespace Delta.ImageRenameTool
     public partial class MainForm : Form
     {
         private static readonly string okStatus = "OK";
-        private Thread currentPreviewThread = null;
+        // Incremented for every preview request; a preview thread that is no
+        // longer the latest one drops its result. (Thread.Abort is not
+        // supported on .NET.)
+        private int previewGeneration;
         private bool loaded = false;
 
         /// <summary>
@@ -55,6 +58,8 @@ namespace Delta.ImageRenameTool
 
         protected override void OnClosed(EventArgs e)
         {
+            // Any preview still being loaded must not touch the closed form.
+            Interlocked.Increment(ref previewGeneration);
             if (EnableImagePreview) Properties.Settings.Default.SplitterRatio =
                 split.Orientation == Orientation.Horizontal ?
                 (double)split.Panel1.Height / split.Height :
@@ -124,28 +129,57 @@ namespace Delta.ImageRenameTool
             if (data == null) return;
             var enableExifRotation = EnableAutoRotatePreview;
 
+            // This method runs on the UI thread, and so do the callbacks below:
+            // a check made inside a callback cannot be overtaken by a newer request.
+            var generation = Interlocked.Increment(ref previewGeneration);
+            Func<bool> isCurrent = () => generation == Volatile.Read(ref previewGeneration);
+
             var thread = new Thread((state) =>
             {
-                wpfViewer.LoadImageAsync(data, enableExifRotation);
-
-                var bitmap = ReadBitmap(data.GetFileName());
-                pg.Invoke(new Action(() => pg.SelectedObject = bitmap));
-                rtb.Invoke(new Action(() =>
+                Bitmap bitmap = null;
+                try
                 {
-                    rtb.Clear();
-                    if (data.Exif == null) return;
-                    foreach (var pair in data.Exif)
-                        rtb.AppendText($"{pair.Key}: {pair.Value}\r\n");
-                }));
+                    if (!isCurrent()) return;
+                    wpfViewer.LoadImageAsync(data, enableExifRotation, isCurrent);
+                    if (!isCurrent()) return; // superseded meanwhile: do not decode the file at all
+
+                    string status;
+                    bitmap = ReadBitmap(data.GetFileName(), out status);
+                    pg.Invoke(new Action(() =>
+                    {
+                        var result = bitmap;
+                        bitmap = null; // handled from here on
+                        if (!isCurrent())
+                        {
+                            // A newer selection is being shown: drop this result.
+                            if (result != null) result.Dispose();
+                            return;
+                        }
+
+                        statusLabel.Text = status;
+                        pg.SelectedObject = result;
+                        rtb.Clear();
+                        if (data.Exif == null) return;
+                        foreach (var pair in data.Exif)
+                            rtb.AppendText($"{pair.Key}: {pair.Value}\r\n");
+                    }));
+                }
+                catch (Exception ex) when (ex is InvalidOperationException || ex is OperationCanceledException)
+                {
+                    // The form was closed while the preview was loading: its
+                    // controls (ObjectDisposedException) or their dispatcher are
+                    // gone, and there is nothing left to update.
+                    if (bitmap != null) bitmap.Dispose();
+                }
             });
 
-            if (currentPreviewThread != null)
-                currentPreviewThread.Abort();
-            currentPreviewThread = thread;
-            currentPreviewThread.Start();
+            thread.IsBackground = true;
+            thread.Start();
         }
 
-        private Bitmap ReadBitmap(string filename)
+        // Called on the preview thread: returns the status text instead of
+        // touching the UI.
+        private static Bitmap ReadBitmap(string filename, out string status)
         {
             Bitmap bitmap = null;
             try
@@ -157,13 +191,12 @@ namespace Delta.ImageRenameTool
                     stream.Close();
                 }
 
-                statusLabel.Text = okStatus;
+                status = okStatus;
             }
             catch (Exception ex)
             {
                 // An error occurred while loading the image file (maybe it does not exist any more...)
-                // Let's make an image indicating the problem.
-                statusLabel.Text = $"Error: {ex.Message}";
+                status = $"Error: {ex.Message}";
             }
 
             return bitmap;
@@ -295,6 +328,8 @@ namespace Delta.ImageRenameTool
             {
                 split.SplitterDistance = split.Orientation == Orientation.Horizontal ?
                     split.Height : split.Width;
+                // Cancel a preview that is still being loaded.
+                Interlocked.Increment(ref previewGeneration);
                 wpfViewer.ResetImage();
             }
             else

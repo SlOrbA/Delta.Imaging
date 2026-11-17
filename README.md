@@ -17,11 +17,11 @@ Imaging libraries and tools, all sharing the [Ms-RL][msrl] license.
 
 ### Using Delta.Wsq
 
-The library requires `nbis32.dll` (32-bit) and `nbis64.dll` (64-bit) in the application directory. Each [release](https://github.com/SlOrbA/Delta.Imaging/releases) has a `Delta.Wsq-<version>.zip` with `Delta.Wsq.dll` and both native DLLs; the native DLLs are also attached separately.
+The library requires `nbis32.dll` (32-bit) and `nbis64.dll` (64-bit) in the application directory. [Releases](https://github.com/SlOrbA/Delta.Imaging/releases) newer than v1.3.3 have a `Delta.Wsq-<version>.zip` with `Delta.Wsq.dll` and both native DLLs; the native DLLs are also attached separately. Releases up to v1.3.3 contain the native DLLs only, so for those the library has to be [built from source](#building).
 
 **DLL Features:**
 - ✅ **No Redistributable dependency** — Built with static CRT (`/MT`)
-- ✅ **KERNEL32.dll and msvcrt.dll only** — Built-in Windows components
+- ✅ **KERNEL32.dll only** — the C runtime is linked statically, nothing else is imported
 - ✅ **Modern toolchain** — MSVC 2022, MinGW-w64 GCC 14+
 - ✅ **Automated builds** — GitHub Actions builds on every release
 
