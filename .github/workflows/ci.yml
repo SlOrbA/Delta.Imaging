@@ -238,9 +238,13 @@ jobs:
           dotnet test $env:TEST_PROJECT --configuration Release --arch x86
           exit $LASTEXITCODE
 
+      # Presentation only: the test steps above decide whether the job fails.
+      # The action intermittently fails with "HttpError: Not Found" when it
+      # updates its check run, which must not fail an otherwise green pipeline.
       - name: Publish test results
         uses: dorny/test-reporter@d61b558e8df85cb60d09ca3e5b09653b4477cea7 # v1
         if: always()
+        continue-on-error: true
         with:
           name: xUnit Tests
           path: "**/*.trx"
