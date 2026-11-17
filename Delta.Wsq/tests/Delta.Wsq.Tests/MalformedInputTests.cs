@@ -1,0 +1,132 @@
+using System;
+using System.IO;
+using System.Linq;
+using Xunit;
+
+namespace Delta.Wsq.Tests
+{
+    /// <summary>
+    /// Malformed or unsupported input must be rejected without damaging the
+    /// native codec: a valid file still decodes afterwards (#14, #20).
+    /// </summary>
+    public class MalformedInputTests
+    {
+        private const int DttMarker = 0xFFA4;   // transform table
+        private const int DhtMarker = 0xFFA6;   // Huffman table
+        private const int SofMarker = 0xFFA2;   // frame header
+        private const int SobMarker = 0xFFA3;   // start of block
+
+        private static byte[] LoadSample(string name) =>
+            File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, name));
+
+        private static void AssertSampleStillDecodes()
+        {
+            var image = WsqCodec.Decode(LoadSample("fp.wsq"));
+            Assert.Equal(320, image.Width);
+            Assert.Equal(480, image.Height);
+            Assert.Equal(2, WsqCodec.GetComments(LoadSample("fp.wsq")).Length);
+        }
+
+        // Offset of the first segment with the given marker: the marker's own
+        // two bytes are at the returned offset, the 2-byte length follows.
+        private static int FindSegment(byte[] wsq, int marker)
+        {
+            var pos = 2; // after SOI
+            while (pos + 4 <= wsq.Length)
+            {
+                var current = (wsq[pos] << 8) | wsq[pos + 1];
+                if (current == marker) return pos;
+                if (current == SobMarker) break;
+                pos += 2 + ((wsq[pos + 2] << 8) | wsq[pos + 3]);
+            }
+
+            throw new InvalidOperationException($"Marker {marker:X4} not found.");
+        }
+
+        [Theory]
+        [InlineData("fp.wsq", 320, 480)]
+        [InlineData("finger.wsq", 320, 480)]
+        [InlineData("nores.wsq", 500, 500)]
+        public void Decode_SampleFiles_ReturnsImage(string name, int width, int height)
+        {
+            var image = WsqCodec.Decode(LoadSample(name));
+
+            Assert.Equal(width, image.Width);
+            Assert.Equal(height, image.Height);
+            Assert.Equal(width * height, image.Data.Length);
+        }
+
+        [Theory]
+        [InlineData(32, 128)]
+        [InlineData(128, 32)]
+        [InlineData(1, 1)]
+        public void Encode_ImageSmallerThanMinimum_Throws(int width, int height)
+        {
+            var image = new RawImageData
+            {
+                Width = width, Height = height, PixelDepth = 8, Resolution = 500, Data = new byte[width * height]
+            };
+
+            Assert.Throws<ArgumentException>(() => WsqCodec.Encode(image, 0.75f, null));
+        }
+
+        [Fact]
+        public void Decode_StreamOfTooSmallImage_ReturnsEmpty()
+        {
+            // Rewrite the frame header of a valid file to claim a 16 x 16 image.
+            var wsq = LoadSample("fp.wsq");
+            var frame = FindSegment(wsq, SofMarker) + 4;        // black, white, height, width
+            wsq[frame + 2] = 0; wsq[frame + 3] = 16;            // height
+            wsq[frame + 4] = 0; wsq[frame + 5] = 16;            // width
+
+            Assert.True(WsqCodec.Decode(wsq).IsEmpty);
+            AssertSampleStillDecodes();
+        }
+
+        [Fact]
+        public void Decode_TruncatedAnywhereInTheHeaders_ReturnsEmpty()
+        {
+            var wsq = LoadSample("fp.wsq");
+            var headersEnd = FindSegment(wsq, SobMarker);
+
+            for (var length = 1; length < headersEnd; length++)
+                Assert.True(WsqCodec.Decode(wsq.Take(length).ToArray()).IsEmpty, $"truncated to {length} bytes");
+
+            AssertSampleStillDecodes();
+        }
+
+        [Fact]
+        public void Decode_TransformTableWithZeroFilterLength_ReturnsEmpty()
+        {
+            var wsq = LoadSample("fp.wsq");
+            wsq[FindSegment(wsq, DttMarker) + 5] = 0; // low-pass filter length
+
+            Assert.True(WsqCodec.Decode(wsq).IsEmpty);
+            AssertSampleStillDecodes();
+        }
+
+        [Fact]
+        public void Decode_HuffmanTableIdOutOfRange_ReturnsEmpty()
+        {
+            var wsq = LoadSample("fp.wsq");
+            wsq[FindSegment(wsq, DhtMarker) + 4] = 0xFF; // table id
+
+            Assert.True(WsqCodec.Decode(wsq).IsEmpty);
+            AssertSampleStillDecodes();
+        }
+
+        [Fact]
+        public void GetComments_TruncatedAnywhereInTheHeaders_ReturnsNoComments()
+        {
+            var wsq = LoadSample("fp.wsq");
+            var headersEnd = FindSegment(wsq, SobMarker);
+
+            // Up to the last header byte the stream is incomplete, also when
+            // the comments themselves (at the start of the file) are intact.
+            for (var length = 1; length < headersEnd; length++)
+                Assert.Empty(WsqCodec.GetComments(wsq.Take(length).ToArray()));
+
+            AssertSampleStillDecodes();
+        }
+    }
+}

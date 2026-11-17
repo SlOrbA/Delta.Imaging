@@ -42,9 +42,15 @@
     </Content>
   </ItemGroup>
 
-  <!-- Sample WSQ image used by tests -->
+  <!-- Sample WSQ images used by tests -->
   <ItemGroup>
     <Content Include="..\TestApplication\Images\fp.wsq">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\images\finger.wsq" Link="finger.wsq">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\images\nores.wsq" Link="nores.wsq">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
