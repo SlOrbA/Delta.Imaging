@@ -14,6 +14,13 @@ namespace Delta.Wsq
             public const float MinCompressionRatio = 3f;
             public const float MaxCompressionRatio = 100f;
 
+            /// <summary>
+            /// Smallest image width and height (in pixels) the codec supports.
+            /// The wavelet decomposition of the underlying NBIS implementation
+            /// does not work on smaller images.
+            /// </summary>
+            public const int MinImageSize = 33;
+
             public const int MinQuality = 0;
             public const int MaxQuality = 100;
 

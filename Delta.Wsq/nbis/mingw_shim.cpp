@@ -13,77 +13,57 @@ extern "C" {
 	int __cdecl __mingw_vsnprintf(char* dest, size_t count, const char* format, va_list arglist);
 	int __cdecl __mingw_vsprintf(char* dest, const char* format, va_list arglist);
 	int __cdecl __mingw_vsscanf(const char* source, const char* format, va_list arglist);
-	// Non-variadic wrappers (used by modern MinGW-w64 GCC >= 14)
+	// Variadic wrappers (used by modern MinGW-w64 GCC >= 14)
 	int __cdecl __mingw_fprintf(FILE* fileptr, const char* format, ...);
 	int __cdecl __mingw_sprintf(char* dest, const char* format, ...);
 	int __cdecl __mingw_sscanf(const char* source, const char* format, ...);
 }
 
+// The NBIS libraries are compiled with MinGW-w64, whose headers redirect the
+// stdio functions to __mingw_* implementations. Forward them to the MSVC CRT.
+// The plain (not _s) variants are used on purpose: they have the semantics
+// the NBIS code was written for.
+#pragma warning(push)
+#pragma warning(disable: 4996) // "may be unsafe": the callers own the buffers
+
 int __cdecl __mingw_vfprintf(FILE* fileptr, const char* format, va_list arglist)
 {
-	return vfprintf_s(fileptr, format, arglist);
-}
-
-// Hack: see http://stackoverflow.com/questions/2457331/replacement-for-vsscanf-on-msvc
-static int hacked_vsscanf(const char* source, const char* format, va_list arglist)
-{
-	void* a[20];
-	for (int i = 0; i < sizeof(a) / sizeof(a[0]); i++)
-		a[i] = va_arg(arglist, void*);
-
-	return sscanf_s(source, format,
-		a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9],
-		a[10], a[11], a[12], a[13], a[14], a[15], a[16], a[17], a[18], a[19]);
-}
-
-static int hacked_vfscanf(FILE* fileptr, const char* format, va_list arglist)
-{
-	void* a[20];
-	for (int i = 0; i < sizeof(a) / sizeof(a[0]); i++)
-		a[i] = va_arg(arglist, void*);
-
-	return fscanf_s(fileptr, format,
-		a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9],
-		a[10], a[11], a[12], a[13], a[14], a[15], a[16], a[17], a[18], a[19]);
+	return vfprintf(fileptr, format, arglist);
 }
 
 int __cdecl __mingw_vfscanf(FILE* fileptr, const char* format, va_list arglist)
 {
-	return hacked_vfscanf(fileptr, format, arglist);
+	return vfscanf(fileptr, format, arglist);
 }
 
 int __cdecl __mingw_vprintf(const char* format, va_list arglist)
 {
-	return vprintf_s(format, arglist);
+	return vprintf(format, arglist);
 }
 
 int __cdecl __mingw_vsnprintf(char* dest, size_t count, const char* format, va_list arglist)
 {
-#pragma warning(disable: 4996)
-	return _vsnprintf(dest, count, format, arglist);
-#pragma warning(default: 4996)
+	// C99 semantics (always terminates, returns the full length), as MinGW's.
+	return vsnprintf(dest, count, format, arglist);
 }
 
 int __cdecl __mingw_vsprintf(char* dest, const char* format, va_list arglist)
 {
-#pragma warning(disable: 4996)
 	return vsprintf(dest, format, arglist);
-#pragma warning(default: 4996)
 }
 
 int __cdecl __mingw_vsscanf(const char* source, const char* format, va_list arglist)
 {
-	return hacked_vsscanf(source, format, arglist);
+	return vsscanf(source, format, arglist);
 }
 
-// ── Non-variadic wrappers (modern MinGW-w64 GCC >= 14) ───────────────────────
-// These call va_start/va_end and delegate to the v* versions above.
+// ── Variadic wrappers (modern MinGW-w64 GCC >= 14) ───────────────────────────
 
 int __cdecl __mingw_fprintf(FILE* fileptr, const char* format, ...)
 {
 	va_list args;
 	va_start(args, format);
-	int result = vfprintf_s(fileptr, format, args);
+	int result = vfprintf(fileptr, format, args);
 	va_end(args);
 	return result;
 }
@@ -92,9 +72,7 @@ int __cdecl __mingw_sprintf(char* dest, const char* format, ...)
 {
 	va_list args;
 	va_start(args, format);
-#pragma warning(disable: 4996)
 	int result = vsprintf(dest, format, args);
-#pragma warning(default: 4996)
 	va_end(args);
 	return result;
 }
@@ -103,7 +81,9 @@ int __cdecl __mingw_sscanf(const char* source, const char* format, ...)
 {
 	va_list args;
 	va_start(args, format);
-	int result = hacked_vsscanf(source, format, args);
+	int result = vsscanf(source, format, args);
 	va_end(args);
 	return result;
 }
+
+#pragma warning(pop)

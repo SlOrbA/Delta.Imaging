@@ -19,6 +19,16 @@ typedef unsigned char byte;
 // Case for getting ANY marker. 
 #define ANY_WSQ 0xffff
 
+// Smallest image width / height the codec can handle. The NBIS wavelet
+// decomposition reads and writes outside its buffers for smaller images.
+#define WSQ_MIN_IMAGE_SIZE 33
+
+// Error codes of this wrapper (NBIS itself uses small negative numbers).
+#define WSQ_ERR_INVALID_ARGUMENT  -9001  // null pointer or non-positive length
+#define WSQ_ERR_IMAGE_TOO_SMALL   -9002  // width or height below WSQ_MIN_IMAGE_SIZE
+#define WSQ_ERR_MALFORMED_STREAM  -9003  // WSQ marker segments are inconsistent
+#define WSQ_ERR_OUT_OF_MEMORY     -9004
+
 extern "C" 
 {
 	// internal API
@@ -58,3 +68,7 @@ extern "C"
 
 	NISTWSQ_API void __cdecl free_mem(void* pointer);
 }
+
+// Structural check of the WSQ marker segments up to the first block, done
+// before handing the data to NBIS (see nistwsq.cpp). Not exported.
+int wsq_validate_stream(const unsigned char* data, int length, int min_image_size);

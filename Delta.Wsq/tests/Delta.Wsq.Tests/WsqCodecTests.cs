@@ -152,7 +152,7 @@ namespace Delta.Wsq.Tests
         public void Encode_VerySmallImage_Succeeds()
         {
             // The smallest size the codec supports
-            const int size = 33;
+            const int size = WsqCodec.Constants.MinImageSize;
             var raw = MakeSyntheticImage(size, size);
 
             var wsq = WsqCodec.Encode(raw, 0.75f, null);
