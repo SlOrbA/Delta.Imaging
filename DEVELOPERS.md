@@ -181,6 +181,8 @@ gh workflow run release.yml --ref <branch> -f tag=v1.3.3 -f dry_run=true
 
 The version of `Delta.Wsq.dll` comes from the release tag; nothing in the repository
 needs to be edited for a release. Builds from source are versioned `0.0.0-dev`.
+For tags older than this scheme (up to v1.3.3) the library cannot be stamped, so a manual
+re-run of `release.yml` on such a tag attaches the native assets only.
 
 ## Code Style
 

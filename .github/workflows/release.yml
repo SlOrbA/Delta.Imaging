@@ -66,7 +66,16 @@ jobs:
           $version = $Matches[1]
           dotnet build Delta.Wsq/Delta.Wsq/Delta.Wsq.csproj --configuration Release "-p:Version=$version" -o managed
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Set-Content managed/VERSION $version -NoNewline
+
+          # Tags older than the tag-based versioning hard-code the assembly
+          # version. Never package a library whose version differs from the
+          # name of the zip: without VERSION the attach job skips the zip.
+          $actual = [Reflection.AssemblyName]::GetAssemblyName("$PWD\managed\Delta.Wsq.dll").Version
+          if ("$actual" -eq "$version.0") {
+            Set-Content managed/VERSION $version -NoNewline
+          } else {
+            Write-Host "::warning::Delta.Wsq.dll built from $env:RELEASE_TAG has version $actual, not $version; Delta.Wsq-$version.zip is not created"
+          }
 
       - name: Upload library artifact
         uses: actions/upload-artifact@v4
@@ -101,15 +110,19 @@ jobs:
           (cd artifacts/nbis-static-libs/lib32 && zip -q -X "$GITHUB_WORKSPACE/assets/nbis-lib32.zip" ./*.a)
           (cd artifacts/nbis-static-libs/lib64 && zip -q -X "$GITHUB_WORKSPACE/assets/nbis-lib64.zip" ./*.a)
           # Library (with PDB and XML documentation) + both native DLLs:
-          # everything an application needs.
-          version=$(cat artifacts/delta-wsq-managed/VERSION)
+          # everything an application needs. VERSION is only present when the
+          # library really has the version of the tag (see build-managed).
           managed=artifacts/delta-wsq-managed
-          files=("$managed/Delta.Wsq.dll" "$managed/Delta.Wsq.pdb")
-          # Tags older than the XML documentation have no Delta.Wsq.xml.
-          if [ -f "$managed/Delta.Wsq.xml" ]; then files+=("$managed/Delta.Wsq.xml"); fi
-          zip -q -X -j "assets/Delta.Wsq-$version.zip" "${files[@]}" assets/nbis32.dll assets/nbis64.dll
+          if [ -f "$managed/VERSION" ]; then
+            version=$(cat "$managed/VERSION")
+            zip -q -X -j "assets/Delta.Wsq-$version.zip" \
+              "$managed/Delta.Wsq.dll" "$managed/Delta.Wsq.pdb" "$managed/Delta.Wsq.xml" \
+              assets/nbis32.dll assets/nbis64.dll
+            unzip -l "assets/Delta.Wsq-$version.zip"
+          else
+            echo "::warning::No versioned Delta.Wsq.dll for this tag; Delta.Wsq-<version>.zip is not created"
+          fi
           ls -l assets
-          unzip -l "assets/Delta.Wsq-$version.zip"
 
       - name: Attach to GitHub Release
         if: ${{ !inputs.dry_run }}
