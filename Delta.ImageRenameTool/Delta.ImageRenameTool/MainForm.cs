@@ -127,17 +127,27 @@ namespace Delta.ImageRenameTool
             if (data == null) return;
             var enableExifRotation = EnableAutoRotatePreview;
 
+            // This method runs on the UI thread, and so do the callbacks below:
+            // a check made inside a callback cannot be overtaken by a newer request.
             var generation = Interlocked.Increment(ref previewGeneration);
+            Func<bool> isCurrent = () => generation == Volatile.Read(ref previewGeneration);
+
             var thread = new Thread((state) =>
             {
-                if (generation != Volatile.Read(ref previewGeneration)) return;
-                wpfViewer.LoadImageAsync(data, enableExifRotation);
+                if (!isCurrent()) return;
+                wpfViewer.LoadImageAsync(data, enableExifRotation, isCurrent);
 
                 var bitmap = ReadBitmap(data.GetFileName());
-                if (generation != Volatile.Read(ref previewGeneration)) return;
-                pg.Invoke(new Action(() => pg.SelectedObject = bitmap));
-                rtb.Invoke(new Action(() =>
+                pg.Invoke(new Action(() =>
                 {
+                    if (!isCurrent())
+                    {
+                        // A newer selection is being shown: drop this result.
+                        if (bitmap != null) bitmap.Dispose();
+                        return;
+                    }
+
+                    pg.SelectedObject = bitmap;
                     rtb.Clear();
                     if (data.Exif == null) return;
                     foreach (var pair in data.Exif)

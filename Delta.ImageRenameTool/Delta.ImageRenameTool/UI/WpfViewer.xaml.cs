@@ -23,10 +23,14 @@ namespace Delta.ImageRenameTool.UI
         internal void ResetImage() =>
             Dispatcher.Invoke((Action)(() => SetValue(ImageProperty, null)));
 
-        internal void LoadImageAsync(FileRenameInfo data, bool applyExifRotation = true)
+        // isCurrent is evaluated on the UI thread right before the image is loaded;
+        // when it returns false the request has been superseded and is skipped.
+        internal void LoadImageAsync(FileRenameInfo data, bool applyExifRotation = true, Func<bool> isCurrent = null)
         {
             Dispatcher.Invoke((Action)(() =>
             {
+                if (isCurrent != null && !isCurrent()) return;
+
                 var filename = data.GetFileName();
                 var rotation = applyExifRotation ? GetRotation(data.Exif) : 0.0;
 
