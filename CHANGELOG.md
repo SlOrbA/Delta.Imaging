@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Releases include `Delta.Wsq-<version>.zip`: `Delta.Wsq.dll`, stamped with the version of the release tag, together with `nbis32.dll` and `nbis64.dll`. Until now the library had to be built from source and reported version 1.1.0.0 regardless of the release (#24)
+- CI builds every project in the repository (`Delta.Wsq.sln` in all four configurations, `Delta.ImageRenameTool.sln`) and runs the tests as a 32-bit process in addition to 64-bit (#23)
+
 ### Fixed
+- `Delta.Wsq/build.cmd` works again: it builds the solution with `msbuild` instead of `dotnet build`, which cannot build the native project (#23)
 - The nbis DLL validates WSQ data before handing it to NBIS: marker segments must lie inside the buffer, the tables, frame header and first block header must have the structure NBIS assumes, a stream to decode must contain all tables before the first block, and the image must be at least 33 x 33 pixels. Truncated or damaged headers previously made NBIS free memory twice or access memory outside its buffers, after which a later decode of a valid file could crash the process (#14)
 - Images smaller than 33 x 33 pixels are rejected: `WsqCodec.Encode` throws `ArgumentException` (see `WsqCodec.Constants.MinImageSize`), `Decode` returns an empty image. The NBIS wavelet code reads and writes outside its buffers for such images, and the data it produced could not be decoded (#14)
 - `wsq_get_comments` no longer leaks the comments it had collected when the stream turns out to be malformed (#20)

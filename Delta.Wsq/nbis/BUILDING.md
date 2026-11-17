@@ -146,7 +146,9 @@ nm lib32/libwsq.a | grep "__imp___iob"
 ### Step 6: Build the DLL with Visual Studio
 
 Open `Delta.Wsq.sln` in Visual Studio 2022 and build `Release|Win32` and `Release|x64`,
-or use the provided `build.cmd` script.
+or run the provided `build.cmd` script from a *Developer Command Prompt for VS 2022*. The
+script builds all four configurations of the solution with `msbuild` (the .NET SDK's
+`dotnet build` cannot build the C++ project).
 
 ### Step 7: Verify DLL dependencies
 

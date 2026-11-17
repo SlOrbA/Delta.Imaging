@@ -134,7 +134,14 @@ seconds instead of after a full Windows build.
    exists and none references the legacy CRT (`__imp___iob` / `msvcr100.dll`)
 2. `build-dll` — `build-nbis-dll.yml` against the **committed** static libraries
 3. `test` — build, xUnit tests with Coverlet (OpenCover) coverage, SonarCloud analysis
-   (skipped if `SONAR_TOKEN` is unavailable), results published as GitHub Checks
+   (skipped if `SONAR_TOKEN` is unavailable), results published as GitHub Checks.
+   The suite then runs twice more: in Debug configuration, and as a **32-bit process**
+   against `nbis32.dll` (the 32-bit .NET runtimes are installed side by side for this)
+
+In parallel with stages 2 and 3, `build-all` compiles everything the test job does not:
+`Delta.Wsq.sln` through `build.cmd` (all four configurations, including the Paint.NET
+plugin and the test application), `Delta.ImageRenameTool.sln`, and a build of
+`Delta.Wsq.dll` with an explicit version to check the release version stamping.
 
 ### build-nbis-dll.yml
 
@@ -153,11 +160,27 @@ runner / MSYS2 drift) and on manual dispatch.
 
 **Trigger:** GitHub Release created (or manual run with an existing tag)
 **Steps:**
-1. Build via `build-nbis-dll.yml` with the committed libraries (same as CI tested)
-2. Zip the static libraries
-3. Attach `nbis32.dll`, `nbis64.dll`, `nbis-lib32.zip`, `nbis-lib64.zip` to the release
+1. Build the native DLLs via `build-nbis-dll.yml` with the committed libraries (same as CI tested)
+2. Build `Delta.Wsq.dll` with the version of the release tag (the tag must be `vX.Y.Z`)
+3. Package and attach to the release:
+   - `nbis32.dll`, `nbis64.dll`
+   - `Delta.Wsq-X.Y.Z.zip` — the .NET library with both native DLLs
+   - `nbis-lib32.zip`, `nbis-lib64.zip` — the NBIS static libraries
 
 Only the attach job has `contents: write`; everything else runs read-only.
+
+To try a change to this workflow without touching a release, run it manually with
+`dry_run`: it builds and packages everything and uploads the assets as the
+`release-assets-dry-run` workflow artifact instead.
+
+```bash
+gh workflow run release.yml --ref <branch> -f tag=v1.3.3 -f dry_run=true
+```
+
+### Versioning
+
+The version of `Delta.Wsq.dll` comes from the release tag; nothing in the repository
+needs to be edited for a release. Builds from source are versioned `0.0.0-dev`.
 
 ## Code Style
 
@@ -198,12 +221,11 @@ If NBIS source needs updating:
 
 ### Releasing a New Version
 
-1. Update version in `Delta.Wsq/Properties/AssemblyInfo.cs`
-2. Update `CHANGELOG.md`
-3. Commit: `git commit -am "Bump version to X.Y.Z"`
-4. Tag: `git tag -a vX.Y.Z -m "Release vX.Y.Z"`
-5. Push: `git push --tags`
-6. GitHub Actions builds & creates release automatically
+1. Update `CHANGELOG.md` (move the Unreleased entries under the new version) and merge it
+2. Create a GitHub Release with a new tag `vX.Y.Z` on `master`
+   (`gh release create vX.Y.Z --generate-notes`, or in the web UI)
+3. `release.yml` builds the assets, stamps `Delta.Wsq.dll` with `X.Y.Z` and attaches
+   them to the release
 
 ## Troubleshooting
 
