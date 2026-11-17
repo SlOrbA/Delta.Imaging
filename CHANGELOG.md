@@ -147,10 +147,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The v1.1.0 DLLs still work but require the VC++ 2010 Redistributable
 
 ### From 1.3.x → 1.4.0
+- Replace `nbis32.dll` and `nbis64.dll` together with `Delta.Wsq.dll`. The validation of WSQ data and the other decoder fixes are in the native DLLs: `Delta.Wsq.dll` 1.4.0 with the 1.3.x native DLLs still crashes on damaged files
 - `WsqCodec.Encode` throws `ArgumentException` / `ArgumentOutOfRangeException` for input it previously passed to the native encoder unchecked: images smaller than 33 x 33 pixels, a depth other than 8 bpp, too little pixel data, a non-positive bit rate
 - Debug builds of `Delta.Wsq` load `nbis32.dll` / `nbis64.dll`; `nbis32d.dll` / `nbis64d.dll` are no longer used
 - The version of `Delta.Wsq.dll` follows the release tag (it was 1.1.0.0 in every release so far)
-- Converted images can differ from earlier versions where those were wrong: 8 bpp images with a non-grayscale palette are converted through their palette colors, and resolutions are rounded instead of truncated (499.9998 dpi becomes 500 ppi, not 499)
+- Converted images can differ from earlier versions where those were wrong:
+  - `Conversions.To8bppBitmap` (and `WsqEncoder.EncodeGdi` with `autoConvertToGrayscale`, the default), `Conversions.WpfImageToImageInfo` and `ToGray8BitmapSource` convert 8 bpp indexed images through their palette colors. This changes the result for every palette other than the identity grayscale palette (entry *i* = gray level *i*): colored palettes, but also grayscale palettes in another order, such as an inverted one
+  - `Conversions.GdiImageToImageInfo`, and `EncodeGdi` with `autoConvertToGrayscale: false`, are unchanged: they still use the palette indexes as gray levels
+  - Resolutions are rounded instead of truncated (499.9998 dpi becomes 500 ppi, not 499)
 - Calls into the nbis DLL run one at a time per process; code that encoded or decoded on several threads keeps working but no longer runs in parallel
 
 ## Future Plans
