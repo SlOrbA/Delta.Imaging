@@ -8,9 +8,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "dependencies", "dependencies", "{C4628534-ADC4-4C5C-B6E0-8A64B60B5ED2}"
 	ProjectSection(SolutionItems) = preProject
 		dependencies\nbis32.dll = dependencies\nbis32.dll
-		dependencies\nbis32d.dll = dependencies\nbis32d.dll
 		dependencies\nbis64.dll = dependencies\nbis64.dll
-		dependencies\nbis64d.dll = dependencies\nbis64d.dll
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "nbis", "nbis\nbis.vcxproj", "{5D64B5B0-0CA3-4B18-AA92-705E5F7C53CC}"

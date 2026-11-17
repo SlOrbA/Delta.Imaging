@@ -10,5 +10,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 [assembly: ComVisible(false)]
+// GenerateAssemblyInfo is off, so the SDK does not add this for net8.0-windows.
+[assembly: System.Runtime.Versioning.SupportedOSPlatform("windows")]
 [assembly: AssemblyVersion("1.1.0.0")]
 [assembly: AssemblyFileVersion("1.1.0.0")]

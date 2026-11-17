@@ -130,7 +130,7 @@ namespace Delta.Wsq
                 Data = rawData,
                 Width = w,
                 Height = h,
-                Resolution = (int)image.DpiX,
+                Resolution = (int)Math.Round(image.DpiX),
                 PixelDepth = 8
             };
         }

@@ -43,6 +43,10 @@ foreach (var comment in comments)
     Console.WriteLine(comment);
 ```
 
+### Thread safety
+
+The underlying NBIS implementation keeps its state in global variables. `Delta.Wsq` therefore serializes all calls into the native DLL: the API can be used from several threads, but encoding and decoding run one at a time per process.
+
 ## Building
 
 ### .NET library

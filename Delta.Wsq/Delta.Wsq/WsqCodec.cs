@@ -12,11 +12,30 @@ namespace Delta.Wsq
         /// <param name="image">The input image.</param>
         /// <param name="bitrate">The bit rate (in bits per pixels).</param>
         /// <param name="comment">An optional comment that is added to the WSQ image.</param>
-        /// <returns>WSQ Encoded image.</returns>
+        /// <returns>WSQ Encoded image; an empty array if <paramref name="image"/> is null or empty.</returns>
+        /// <exception cref="ArgumentException">The image is not 8 bits per pixel, its dimensions
+        /// are not positive, or it holds less data than its dimensions require.</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="bitrate"/> is not a
+        /// positive finite number.</exception>
         public static byte[] Encode(RawImageData image, float bitrate, string comment)
         {
             if (image == null || image.IsEmpty)
                 return new byte[0];
+
+            // The native encoder trusts these values and would read past the
+            // end of the pixel buffer.
+            if (image.Width <= 0 || image.Height <= 0)
+                throw new ArgumentException(string.Format(
+                    "Image dimensions must be positive (got {0} x {1}).", image.Width, image.Height), nameof(image));
+            if (image.PixelDepth != 8)
+                throw new ArgumentException(string.Format(
+                    "Only 8 bits per pixel images are supported (got {0}).", image.PixelDepth), nameof(image));
+            if ((long)image.Width * image.Height > image.Data.Length)
+                throw new ArgumentException(string.Format(
+                    "Image data holds {0} bytes, but {1} x {2} pixels need {3}.",
+                    image.Data.Length, image.Width, image.Height, (long)image.Width * image.Height), nameof(image));
+            if (float.IsNaN(bitrate) || float.IsInfinity(bitrate) || bitrate <= 0f)
+                throw new ArgumentOutOfRangeException(nameof(bitrate), bitrate, "The bit rate must be a positive finite number.");
 
             var inputData = image.Data;
             var inputDataPtr = Marshal.AllocHGlobal(inputData.Length);

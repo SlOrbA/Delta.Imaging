@@ -45,13 +45,7 @@ namespace Delta.Wsq
             }
 
             if (info.PixelDepth == 8)
-            {
-                // For some crazy reason, we have to write the palette in this roundabout fashion.
-                var palette = image.Palette;
-                for (int i = 0; i < 256; i++)
-                    palette.Entries[i] = Color.FromArgb(i, i, i);
-                image.Palette = palette;
-            }
+                SetGrayscalePalette(image);
 
             SafeSetResolution(image, info.Resolution);
             return image;
@@ -67,7 +61,7 @@ namespace Delta.Wsq
 
             var info = new RawImageData()
             {
-                Resolution = (int)image.HorizontalResolution,
+                Resolution = (int)Math.Round(image.HorizontalResolution),
                 Width = image.Width,
                 Height = image.Height,
                 PixelDepth = image.PixelFormat == PixelFormat.Format8bppIndexed ? 8 : 16
@@ -104,7 +98,9 @@ namespace Delta.Wsq
         public unsafe static Bitmap To8bppBitmap(Bitmap input)
         {
             if (input == null) throw new ArgumentNullException("input");
-            if (input.PixelFormat == PixelFormat.Format8bppIndexed)
+            // An indexed image can only be used as is when its palette indexes
+            // are the gray levels; otherwise convert it through its colors.
+            if (input.PixelFormat == PixelFormat.Format8bppIndexed && HasGrayscalePalette(input))
             {
                 var clone = (Bitmap)input.Clone();
                 clone.SetResolution(input.HorizontalResolution, input.VerticalResolution);
@@ -150,9 +146,35 @@ namespace Delta.Wsq
                 }
             }
 
+            SetGrayscalePalette(result);
             result.SetResolution(input.HorizontalResolution, input.VerticalResolution);
 
             return result;
+        }
+
+        // Palette index i = gray level i.
+        private static void SetGrayscalePalette(Bitmap image)
+        {
+            // Bitmap.Palette returns a copy: modify it, then assign it back.
+            var palette = image.Palette;
+            for (int i = 0; i < palette.Entries.Length; i++)
+                palette.Entries[i] = Color.FromArgb(i, i, i);
+            image.Palette = palette;
+        }
+
+        // A full, opaque 256-entry palette where index i is gray level i. Images
+        // loaded from files can carry shorter palettes; those are converted.
+        private static bool HasGrayscalePalette(Bitmap image)
+        {
+            var entries = image.Palette.Entries;
+            if (entries.Length != 256) return false;
+            for (int i = 0; i < entries.Length; i++)
+            {
+                var c = entries[i];
+                if (c.A != 255 || c.R != i || c.G != i || c.B != i) return false;
+            }
+
+            return true;
         }
 
         private static void SafeSetResolution(Bitmap image, int resolution)
