@@ -6,15 +6,15 @@ namespace Delta.Wsq
     internal static class NativeMethods
     {
         //private const string prefix = "nistbio";
-        private const string dllPrefix = "nbis";
-#if DEBUG
-        private const string dllSuffix = "d";
-#else
-        private const string dllSuffix = "";
-#endif
+        // The same DLL names in Debug and Release builds of this assembly: only
+        // nbis32.dll / nbis64.dll are built by CI and shipped in releases. To
+        // debug the native code, copy a Debug build of nbis over them.
+        private const string x86Dll = "nbis32.dll";
+        private const string x64Dll = "nbis64.dll";
 
-        private const string x86Dll = dllPrefix + "32" + dllSuffix + ".dll";
-        private const string x64Dll = dllPrefix + "64" + dllSuffix + ".dll";
+        // NBIS keeps its codec state in global variables (see nbis/include/wsq.h),
+        // so calls into the DLL must never run concurrently.
+        private static readonly object nativeLock = new object();
 
         // The nbis DLL exports are __cdecl (see nbis/nistwsq.h). DllImport defaults
         // to StdCall, which on x86 leaves the arguments on the stack after every
@@ -104,9 +104,12 @@ namespace Delta.Wsq
             IntPtr inputData,
             int inputLength)
         {
-            return IntPtr.Size == 8 ?
-                wsq_decode64(out outputData, out width, out height, out depth, out dpi, out lossyflag, inputData, inputLength) :
-                wsq_decode32(out outputData, out width, out height, out depth, out dpi, out lossyflag, inputData, inputLength);
+            lock (nativeLock)
+            {
+                return IntPtr.Size == 8 ?
+                    wsq_decode64(out outputData, out width, out height, out depth, out dpi, out lossyflag, inputData, inputLength) :
+                    wsq_decode32(out outputData, out width, out height, out depth, out dpi, out lossyflag, inputData, inputLength);
+            }
         }
 
         public static int wsq_get_comments(
@@ -115,9 +118,12 @@ namespace Delta.Wsq
             IntPtr inputData,
             int inputLength)
         {
-            return IntPtr.Size == 8 ?
-                wsq_get_comments64(out commentData, out commentsCount, inputData, inputLength) :
-                wsq_get_comments32(out commentData, out commentsCount, inputData, inputLength);
+            lock (nativeLock)
+            {
+                return IntPtr.Size == 8 ?
+                    wsq_get_comments64(out commentData, out commentsCount, inputData, inputLength) :
+                    wsq_get_comments32(out commentData, out commentsCount, inputData, inputLength);
+            }
         }
 
         public static int wsq_encode(
@@ -131,16 +137,22 @@ namespace Delta.Wsq
             int dpi,
             string comment_text)
         {
-            return IntPtr.Size == 8 ?
-                wsq_encode64(out outputData, out outputLength, bitrate, inputData, width, height, depth, dpi, comment_text) :
-                wsq_encode32(out outputData, out outputLength, bitrate, inputData, width, height, depth, dpi, comment_text);
+            lock (nativeLock)
+            {
+                return IntPtr.Size == 8 ?
+                    wsq_encode64(out outputData, out outputLength, bitrate, inputData, width, height, depth, dpi, comment_text) :
+                    wsq_encode32(out outputData, out outputLength, bitrate, inputData, width, height, depth, dpi, comment_text);
+            }
         }
 
         public static void free_mem(IntPtr data)
         {
-            if (IntPtr.Size == 8)
-                free_mem64(data);
-            else free_mem32(data);
+            lock (nativeLock)
+            {
+                if (IntPtr.Size == 8)
+                    free_mem64(data);
+                else free_mem32(data);
+            }
         }
     }
 }

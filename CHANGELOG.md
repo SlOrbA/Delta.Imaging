@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- `WsqCodec.Encode` validates its input instead of letting the native encoder read past the pixel buffer: dimensions must be positive, the depth 8 bpp, `Data` at least `Width * Height` bytes (`ArgumentException`) and the bit rate a positive finite number (`ArgumentOutOfRangeException`) (#15)
+- Calls into the nbis DLL are serialized. NBIS keeps codec state in global variables, so concurrent `Encode` / `Decode` / `GetComments` calls could corrupt each other or crash (#16)
+- Debug builds of `Delta.Wsq` load `nbis32.dll` / `nbis64.dll` like Release builds, instead of `nbis32d.dll` / `nbis64d.dll`, which are neither built by CI nor shipped. `dotnet test` now works in the default configuration (#17)
+- Image resolution is rounded instead of truncated when converting GDI+ / WPF images: a 500 dpi PNG (stored as 499.9998 dpi) is no longer written as 499 ppi (#18)
+- `Conversions.To8bppBitmap`: 8 bpp images with a non-grayscale palette are converted through their palette colors instead of using the palette indexes as gray levels, and the returned bitmap always has a grayscale palette (#19)
 - 32-bit processes: the P/Invoke declarations in `NativeMethods` now use `CallingConvention.Cdecl`, matching the `__cdecl` exports of the nbis DLL. The default (StdCall) left the arguments on the stack after every call, reported by the debugger as `PInvokeStackImbalance`
 - 64-bit processes: `Conversions.To8bppBitmap` (used by `WsqEncoder.EncodeGdi` with `autoConvertToGrayscale`) no longer casts bitmap pointers to `int`, which threw `OverflowException` on .NET Framework and crashed with an access violation on .NET when the bitmap buffer was above 2 GB
 - `Conversions.GdiImageToImageInfo` / `ImageInfoToGdiImage` (and therefore `WsqEncoder.EncodeGdi` / `WsqDecoder.DecodeGdi`) threw `EntryPointNotFoundException`: they P/Invoked `CopyMemory` from `kernel32.dll`, which is only a macro in the Windows headers and not an exported function. Rows are now copied with `Buffer.MemoryCopy`
