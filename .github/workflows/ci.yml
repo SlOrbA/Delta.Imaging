@@ -229,7 +229,8 @@ jobs:
           $installer = Join-Path $env:RUNNER_TEMP 'dotnet-install.ps1'
           Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile $installer
           foreach ($runtime in 'dotnet', 'windowsdesktop') {
-            & $installer -Architecture x86 -Channel 8.0 -Runtime $runtime -InstallDir $x86
+            # -NoPath: keep the 64-bit SDK as "dotnet"; these are runtimes only.
+            & $installer -Architecture x86 -Channel 8.0 -Runtime $runtime -InstallDir $x86 -NoPath
           }
           # Where the 32-bit test host looks for its runtime.
           ${env:DOTNET_ROOT(x86)} = $x86
