@@ -2,8 +2,9 @@ name: Release
 
 # Builds the release assets for a new GitHub Release and attaches them:
 #   nbis32.dll, nbis64.dll        native codec DLLs
-#   Delta.Wsq-<version>.zip       the .NET library (versioned from the tag)
-#                                 together with both native DLLs
+#   Delta.Wsq-<version>.zip       the .NET library (versioned from the tag,
+#                                 with PDB and XML documentation) together
+#                                 with both native DLLs
 #   nbis-lib32.zip, nbis-lib64.zip  NBIS static libraries
 #
 # A manual run with dry_run builds and packages everything but uploads the
@@ -71,9 +72,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: delta-wsq-managed
+          # Delta.Wsq.dll, .pdb and .xml (XML documentation)
           path: |
-            managed/Delta.Wsq.dll
-            managed/Delta.Wsq.pdb
+            managed/Delta.Wsq.*
             managed/VERSION
           if-no-files-found: error
           retention-days: 30
@@ -98,11 +99,12 @@ jobs:
           cp artifacts/nbis-dll/Win32/nbis32.dll artifacts/nbis-dll/x64/nbis64.dll assets/
           (cd artifacts/nbis-static-libs/lib32 && zip -q -X "$GITHUB_WORKSPACE/assets/nbis-lib32.zip" ./*.a)
           (cd artifacts/nbis-static-libs/lib64 && zip -q -X "$GITHUB_WORKSPACE/assets/nbis-lib64.zip" ./*.a)
-          # Library + both native DLLs: everything an application needs.
+          # Library (with PDB and XML documentation) + both native DLLs:
+          # everything an application needs.
           version=$(cat artifacts/delta-wsq-managed/VERSION)
+          test -f artifacts/delta-wsq-managed/Delta.Wsq.dll
           zip -q -X -j "assets/Delta.Wsq-$version.zip" \
-            artifacts/delta-wsq-managed/Delta.Wsq.dll \
-            artifacts/delta-wsq-managed/Delta.Wsq.pdb \
+            artifacts/delta-wsq-managed/Delta.Wsq.* \
             assets/nbis32.dll assets/nbis64.dll
           ls -l assets
           unzip -l "assets/Delta.Wsq-$version.zip"

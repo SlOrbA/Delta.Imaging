@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Releases include `Delta.Wsq-<version>.zip`: `Delta.Wsq.dll`, stamped with the version of the release tag, together with `nbis32.dll` and `nbis64.dll`. Until now the library had to be built from source and reported version 1.1.0.0 regardless of the release (#24)
+- Releases include `Delta.Wsq-<version>.zip`: `Delta.Wsq.dll`, stamped with the version of the release tag, with its PDB and XML documentation, together with `nbis32.dll` and `nbis64.dll`. Until now the library had to be built from source and reported version 1.1.0.0 regardless of the release (#24)
 - CI builds every project in the repository (`Delta.Wsq.sln` in all four configurations, `Delta.ImageRenameTool.sln`) and runs the tests as a 32-bit process in addition to 64-bit (#23)
 
 ### Fixed

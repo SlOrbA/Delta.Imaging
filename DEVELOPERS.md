@@ -164,7 +164,7 @@ runner / MSYS2 drift) and on manual dispatch.
 2. Build `Delta.Wsq.dll` with the version of the release tag (the tag must be `vX.Y.Z`)
 3. Package and attach to the release:
    - `nbis32.dll`, `nbis64.dll`
-   - `Delta.Wsq-X.Y.Z.zip` — the .NET library with both native DLLs
+   - `Delta.Wsq-X.Y.Z.zip` — the .NET library (DLL, PDB, XML documentation) with both native DLLs
    - `nbis-lib32.zip`, `nbis-lib64.zip` — the NBIS static libraries
 
 Only the attach job has `contents: write`; everything else runs read-only.

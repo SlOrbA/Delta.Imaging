@@ -11,6 +11,10 @@
     <Description>WSQ Codec</Description>
     <Company>Delta Software</Company>
     <Product>Delta.Wsq</Product>
+    <!-- IntelliSense documentation for consumers of the release zip. Not every
+         public member is documented yet (CS1591). -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
     <RootNamespace>Delta.Wsq</RootNamespace>
     <AssemblyName>Delta.Wsq</AssemblyName>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>

@@ -18,8 +18,9 @@ namespace Delta.Wsq.Tests
         private static byte[] LoadTestWsq() =>
             File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "fp.wsq"));
 
-        // CI runs the suite as a 64-bit and as a 32-bit process and states which
-        // one it expects, so a run cannot silently use the wrong architecture.
+        // CI runs the suite as a 64-bit and as a 32-bit process and states in
+        // DELTA_WSQ_EXPECTED_BITNESS which one each run must be, so a run
+        // cannot silently use the wrong architecture.
         [Fact]
         public void Process_HasTheBitnessTheTestRunExpects()
         {
