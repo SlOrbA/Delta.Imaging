@@ -58,6 +58,8 @@ namespace Delta.ImageRenameTool
 
         protected override void OnClosed(EventArgs e)
         {
+            // Any preview still being loaded must not touch the closed form.
+            Interlocked.Increment(ref previewGeneration);
             if (EnableImagePreview) Properties.Settings.Default.SplitterRatio =
                 split.Orientation == Orientation.Horizontal ?
                 (double)split.Panel1.Height / split.Height :
@@ -134,28 +136,41 @@ namespace Delta.ImageRenameTool
 
             var thread = new Thread((state) =>
             {
-                if (!isCurrent()) return;
-                wpfViewer.LoadImageAsync(data, enableExifRotation, isCurrent);
-                if (!isCurrent()) return; // superseded meanwhile: do not decode the file at all
-
-                string status;
-                var bitmap = ReadBitmap(data.GetFileName(), out status);
-                pg.Invoke(new Action(() =>
+                Bitmap bitmap = null;
+                try
                 {
-                    if (!isCurrent())
-                    {
-                        // A newer selection is being shown: drop this result.
-                        if (bitmap != null) bitmap.Dispose();
-                        return;
-                    }
+                    if (!isCurrent()) return;
+                    wpfViewer.LoadImageAsync(data, enableExifRotation, isCurrent);
+                    if (!isCurrent()) return; // superseded meanwhile: do not decode the file at all
 
-                    statusLabel.Text = status;
-                    pg.SelectedObject = bitmap;
-                    rtb.Clear();
-                    if (data.Exif == null) return;
-                    foreach (var pair in data.Exif)
-                        rtb.AppendText($"{pair.Key}: {pair.Value}\r\n");
-                }));
+                    string status;
+                    bitmap = ReadBitmap(data.GetFileName(), out status);
+                    pg.Invoke(new Action(() =>
+                    {
+                        var result = bitmap;
+                        bitmap = null; // handled from here on
+                        if (!isCurrent())
+                        {
+                            // A newer selection is being shown: drop this result.
+                            if (result != null) result.Dispose();
+                            return;
+                        }
+
+                        statusLabel.Text = status;
+                        pg.SelectedObject = result;
+                        rtb.Clear();
+                        if (data.Exif == null) return;
+                        foreach (var pair in data.Exif)
+                            rtb.AppendText($"{pair.Key}: {pair.Value}\r\n");
+                    }));
+                }
+                catch (Exception ex) when (ex is InvalidOperationException || ex is OperationCanceledException)
+                {
+                    // The form was closed while the preview was loading: its
+                    // controls (ObjectDisposedException) or their dispatcher are
+                    // gone, and there is nothing left to update.
+                    if (bitmap != null) bitmap.Dispose();
+                }
             });
 
             thread.IsBackground = true;
@@ -313,6 +328,8 @@ namespace Delta.ImageRenameTool
             {
                 split.SplitterDistance = split.Orientation == Orientation.Horizontal ?
                     split.Height : split.Width;
+                // Cancel a preview that is still being loaded.
+                Interlocked.Increment(ref previewGeneration);
                 wpfViewer.ResetImage();
             }
             else
