@@ -6,9 +6,9 @@ namespace Delta.Wsq
     internal static class NativeMethods
     {
         //private const string prefix = "nistbio";
-        // The same DLL names in Debug and Release builds of this assembly: only
-        // nbis32.dll / nbis64.dll are built by CI and shipped in releases. To
-        // debug the native code, copy a Debug build of nbis over them.
+        // The same DLL names in Debug and Release builds of this assembly, and in
+        // all configurations of nbis.vcxproj: releases ship nbis32.dll / nbis64.dll
+        // only. To debug the native code, build a Debug configuration of nbis.
         private const string x86Dll = "nbis32.dll";
         private const string x64Dll = "nbis64.dll";
 

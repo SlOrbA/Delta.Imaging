@@ -162,13 +162,16 @@ namespace Delta.Wsq
             image.Palette = palette;
         }
 
+        // A full, opaque 256-entry palette where index i is gray level i. Images
+        // loaded from files can carry shorter palettes; those are converted.
         private static bool HasGrayscalePalette(Bitmap image)
         {
             var entries = image.Palette.Entries;
+            if (entries.Length != 256) return false;
             for (int i = 0; i < entries.Length; i++)
             {
                 var c = entries[i];
-                if (c.R != i || c.G != i || c.B != i) return false;
+                if (c.A != 255 || c.R != i || c.G != i || c.B != i) return false;
             }
 
             return true;

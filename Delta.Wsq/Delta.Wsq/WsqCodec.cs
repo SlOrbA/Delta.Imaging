@@ -26,16 +26,16 @@ namespace Delta.Wsq
             // end of the pixel buffer.
             if (image.Width <= 0 || image.Height <= 0)
                 throw new ArgumentException(string.Format(
-                    "Image dimensions must be positive (got {0} x {1}).", image.Width, image.Height), "image");
+                    "Image dimensions must be positive (got {0} x {1}).", image.Width, image.Height), nameof(image));
             if (image.PixelDepth != 8)
                 throw new ArgumentException(string.Format(
-                    "Only 8 bits per pixel images are supported (got {0}).", image.PixelDepth), "image");
+                    "Only 8 bits per pixel images are supported (got {0}).", image.PixelDepth), nameof(image));
             if ((long)image.Width * image.Height > image.Data.Length)
                 throw new ArgumentException(string.Format(
                     "Image data holds {0} bytes, but {1} x {2} pixels need {3}.",
-                    image.Data.Length, image.Width, image.Height, (long)image.Width * image.Height), "image");
+                    image.Data.Length, image.Width, image.Height, (long)image.Width * image.Height), nameof(image));
             if (float.IsNaN(bitrate) || float.IsInfinity(bitrate) || bitrate <= 0f)
-                throw new ArgumentOutOfRangeException("bitrate", bitrate, "The bit rate must be a positive finite number.");
+                throw new ArgumentOutOfRangeException(nameof(bitrate), bitrate, "The bit rate must be a positive finite number.");
 
             var inputData = image.Data;
             var inputDataPtr = Marshal.AllocHGlobal(inputData.Length);
