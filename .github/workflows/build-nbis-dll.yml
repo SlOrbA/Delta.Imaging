@@ -178,6 +178,23 @@ jobs:
           Copy-Item C:\NBISBuild32\lib\*.a Delta.Wsq\nbis\lib32\ -Force
           Copy-Item C:\NBISBuild64\lib\*.a Delta.Wsq\nbis\lib64\ -Force
 
+          # Record what the libraries were built from. ci.yml compares this
+          # with nbis-source.env and patches/, so the committed libraries
+          # cannot fall behind them. Same format as the lint step computes:
+          # SHA-256 over the patch files in name order.
+          $commit = (git -C C:\nbis-src-32 rev-parse HEAD).Trim()
+          $bytes = [System.Collections.Generic.List[byte]]::new()
+          foreach ($patch in Get-ChildItem Delta.Wsq\nbis\patches\*.patch | Sort-Object Name) {
+            $bytes.AddRange([System.IO.File]::ReadAllBytes($patch.FullName))
+          }
+          $hash = [System.BitConverter]::ToString(
+            [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes.ToArray())).Replace('-', '').ToLowerInvariant()
+          $stamp = "NBIS_COMMIT=$commit`nPATCHES_SHA256=$hash`n"
+          foreach ($dir in 'lib32', 'lib64') {
+            [System.IO.File]::WriteAllText("$PWD\Delta.Wsq\nbis\$dir\SOURCE", $stamp)
+          }
+          Write-Host $stamp
+
       # ── Build the DLL with MSVC ────────────────────────────────────────────
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2.0.0
@@ -256,7 +273,9 @@ jobs:
           name: nbis-static-libs
           path: |
             Delta.Wsq/nbis/lib32/*.a
+            Delta.Wsq/nbis/lib32/SOURCE
             Delta.Wsq/nbis/lib64/*.a
+            Delta.Wsq/nbis/lib64/SOURCE
           retention-days: 30
 
   # ── Fuzz the decoder ───────────────────────────────────────────────────────

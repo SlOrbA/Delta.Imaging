@@ -70,12 +70,46 @@ static size_t headers_end(const Bytes& d)
 	return d.size();
 }
 
+// Offset of the first segment with the given marker in the headers, or 0.
+static size_t find_segment(const Bytes& d, int wanted)
+{
+	size_t pos = 2;
+	while (pos + 4 <= d.size())
+	{
+		const int marker = (d[pos] << 8) | d[pos + 1];
+		if (marker == wanted) return pos;
+		if (marker == SOB_WSQ) break;
+		pos += 2 + ((d[pos + 2] << 8) | d[pos + 3]);
+	}
+	return 0;
+}
+
+// A well-formed transform table segment for the given filter lengths: marker,
+// length, the two lengths, then (sign, scale, 4-byte value) per coefficient
+// of the two half filters.
+static Bytes transform_table(int hisz, int losz, bool random_coefficients)
+{
+	const int coefficients = (hisz + 1) / 2 + (losz + 1) / 2;
+	const int length = 4 + 6 * coefficients;
+	Bytes segment;
+	segment.push_back((unsigned char)(DTT_WSQ >> 8));
+	segment.push_back((unsigned char)DTT_WSQ);
+	segment.push_back((unsigned char)(length >> 8));
+	segment.push_back((unsigned char)length);
+	segment.push_back((unsigned char)hisz);
+	segment.push_back((unsigned char)losz);
+	for (int i = 0; i < 6 * coefficients; i++)
+		segment.push_back(random_coefficients ? (unsigned char)rng() : (unsigned char)(i % 6 == 1 ? 9 : i % 6 == 5 ? 1 : 0));
+	return segment;
+}
+
 static bool decode(const Bytes& in, Bytes* pixels)
 {
 	// A heap copy of exactly the right size, so AddressSanitizer sees every
 	// read outside the input.
 	unsigned char* copy = (unsigned char*)malloc(in.size() ? in.size() : 1);
-	memcpy(copy, in.data(), in.size());
+	if (!in.empty())
+		memcpy(copy, in.data(), in.size());
 
 	unsigned char* out = nullptr;
 	int w = 0, h = 0, depth = 0, ppi = 0, lossy = 0;
@@ -185,6 +219,59 @@ static std::vector<Mutation> mutations(const Bytes& original)
 		data[offset + 1] = (unsigned char)marker;
 		snprintf(name, sizeof name, "marker %04X at %zu", marker, offset);
 		add(all, name, data);
+	}
+
+	// Well-formed transform tables with other filter lengths: in place of
+	// the original table, and in the middle of the compressed data, where
+	// the wrapper's header validation does not see them. Single changed
+	// bytes cannot produce these, because the segment length has to match.
+	static const int lengths[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 16, 31, 32, 33, 64, 127, 128, 254, 255 };
+	const size_t table = find_segment(original, DTT_WSQ);
+	if (table != 0)
+	{
+		const size_t table_end = table + 2 + ((original[table + 2] << 8) | original[table + 3]);
+		int n = 0;
+		for (int hisz : lengths)
+		{
+			for (int losz : lengths)
+			{
+				const Bytes segment = transform_table(hisz, losz, n++ % 2 == 0);
+
+				Bytes data(original.begin(), original.begin() + table);
+				data.insert(data.end(), segment.begin(), segment.end());
+				data.insert(data.end(), original.begin() + table_end, original.end());
+				snprintf(name, sizeof name, "transform table with filter lengths %d, %d", hisz, losz);
+				add(all, name, data);
+
+				if (n % 3 != 0) continue;
+				const size_t offset = headers + rng() % (size - headers);
+				data = original;
+				data.insert(data.begin() + offset, segment.begin(), segment.end());
+				snprintf(name, sizeof name, "transform table with filter lengths %d, %d inserted at %zu", hisz, losz, offset);
+				add(all, name, data);
+			}
+		}
+	}
+
+	// Frame dimensions: around the smallest supported image, around the
+	// limits of the 16-bit types NBIS uses, and far beyond the data.
+	static const int dimensions[] = { 0, 1, 32, 33, 34, 255, 256, 1000, 0x7FFF, 0x8000, 0xB505, 0xFFFF };
+	const size_t frame = find_segment(original, SOF_WSQ);
+	if (frame != 0)
+	{
+		for (int height : dimensions)
+		{
+			for (int width : dimensions)
+			{
+				Bytes data = original;
+				data[frame + 6] = (unsigned char)(height >> 8);
+				data[frame + 7] = (unsigned char)height;
+				data[frame + 8] = (unsigned char)(width >> 8);
+				data[frame + 9] = (unsigned char)width;
+				snprintf(name, sizeof name, "frame %d x %d", width, height);
+				add(all, name, data);
+			}
+		}
 	}
 
 	// Several random bytes anywhere in the file.

@@ -188,12 +188,15 @@ hosts the DLL. Two layers prevent that:
   stream is handed to NBIS.
 - [`patches/`](patches) fixes the decoder itself, for damage that only shows while the image
   data is decoded: table ids, Huffman codes and coefficient counts are bounds-checked, tables
-  read from the middle of the data are validated, and the subband geometry is checked before
-  it is used.
+  read from the middle of the data are validated, the subband geometry is checked before it is
+  used, and the pixel count must fit the 32-bit arithmetic NBIS uses. Transform tables are
+  only accepted with the filter lengths of the standard WSQ filter pair (9 and 7): the
+  reconstruction (`join_lets`) derives buffer offsets from the lengths without checking them.
 
 [`fuzz/run.sh`](fuzz/run.sh) builds the wrapper and the patched NBIS sources for Linux with
-AddressSanitizer and decodes about 35 000 mutations of the sample files (truncations, changed
-header bytes, damaged and overwritten image data, inserted markers). Every mutation must be
+AddressSanitizer and decodes about 37 000 mutations of the sample files (truncations, changed
+header bytes, damaged and overwritten image data, inserted markers, well-formed transform
+tables with other filter lengths, frame dimensions around the limits of the integer types). Every mutation must be
 decoded or rejected without a memory error or a hang, and the unmodified file must decode to
 the same pixels afterwards. It needs `git`, `gcc` and `g++`:
 
@@ -203,12 +206,15 @@ Delta.Wsq/nbis/fuzz/run.sh --unpatched   # what the patches fix
 ```
 
 `build-nbis-dll.yml` runs it together with the source build: on pull requests that change the
-patches, the wrapper, the fuzzer or the workflow, weekly and on demand. `ci.yml` checks that
-the committed libraries were built from the patched sources.
+patches, the wrapper, the fuzzer or the workflow, weekly and on demand. The source build
+writes the NBIS commit and a checksum of the patches to `lib32/SOURCE` and `lib64/SOURCE`;
+`ci.yml` fails when those do not match `nbis-source.env` and `patches/`, so the committed
+libraries cannot fall behind the patches.
 
 To change the decoder: edit a clone of NBIS at the pinned commit, write the result of
 `git diff` to a new file in `patches/`, run the fuzzer, and refresh the committed libraries
-from the `nbis-static-libs` artifact of the source build of your pull request.
+from the `nbis-static-libs` artifact of the source build of your pull request (the `.a`
+files and `SOURCE`, for both `lib32` and `lib64`).
 
 ---
 

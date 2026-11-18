@@ -46,7 +46,7 @@ foreach (var comment in comments)
 ### Limitations
 
 - Images must be 8 bits per pixel grayscale and at least 33 x 33 pixels (`WsqCodec.Constants.MinImageSize`).
-- Damaged or truncated WSQ data is rejected with a `WsqException`. The decoder is fuzzed with corrupted files under AddressSanitizer (see [`Delta.Wsq/nbis/fuzz`](Delta.Wsq/nbis/fuzz)), but a file can still claim a very large image: decoding allocates memory in proportion to the width and height in its header before the data is checked.
+- Damaged or truncated WSQ data is rejected with a `WsqException`. The decoder is fuzzed with corrupted files under AddressSanitizer (see [`Delta.Wsq/nbis/fuzz`](Delta.Wsq/nbis/fuzz)), but a file can still claim a very large image: decoding allocates memory in proportion to the width and height in its header before the data is checked, up to the limit of about 536 million pixels. Only the standard WSQ wavelet filter pair is supported (filter lengths 9 and 7, the pair NBIS itself writes); files with other filters are rejected.
 
 ### Thread safety
 

@@ -54,7 +54,9 @@ g++ "${flags[@]}" -std=c++17 -D'__declspec(x)=' -D__cdecl= -DNISTWSQ_EXPORTS \
     "$wrapper/fuzz.cpp" "$wrapper/nistwsq.cpp" "$obj"/*.o -lm -o "$work/fuzz"
 
 samples=("$nbis_dir"/../tests/TestApplication/Images/fp.wsq "$nbis_dir"/../images/finger.wsq "$nbis_dir"/../images/nores.wsq)
-ASAN_OPTIONS=detect_leaks=0:abort_on_error=0:exitcode=9 "$work/fuzz" -q "${samples[@]}" 2> "$work/asan.log" && status=0 || status=$?
+# allocator_may_return_null: a file may claim an image too large to allocate;
+# the decoder has to handle the failed allocation.
+ASAN_OPTIONS=detect_leaks=0:abort_on_error=0:exitcode=9:allocator_may_return_null=1 "$work/fuzz" -q "${samples[@]}" 2> "$work/asan.log" && status=0 || status=$?
 
 if [ "$status" != 0 ]; then
   echo "--- distinct AddressSanitizer findings ---"

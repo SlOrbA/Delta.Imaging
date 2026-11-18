@@ -201,6 +201,38 @@ namespace Delta.Wsq.Tests
             AssertSampleStillDecodes();
         }
 
+        // A well-formed transform table (segment length matching the filter
+        // lengths) passes the structural validation, but the reconstruction
+        // only works for the filter lengths of the standard WSQ filter pair.
+        [Theory]
+        [InlineData(7, 1)]
+        [InlineData(1, 7)]
+        [InlineData(8, 8)]
+        [InlineData(9, 9)]
+        [InlineData(7, 9)]
+        [InlineData(255, 255)]
+        public void Decode_TransformTableWithOtherFilterLengths_Throws(int hisz, int losz)
+        {
+            var original = LoadSample("fp.wsq");
+            var start = FindSegment(original, DttMarker);
+            var end = start + 2 + ((original[start + 2] << 8) | original[start + 3]);
+
+            var coefficients = (hisz + 1) / 2 + (losz + 1) / 2;
+            var length = 4 + 6 * coefficients;
+            var table = new byte[2 + length];
+            table[0] = DttMarker >> 8;
+            table[1] = DttMarker & 0xFF;
+            table[2] = (byte)(length >> 8);
+            table[3] = (byte)length;
+            table[4] = (byte)hisz;
+            table[5] = (byte)losz;
+
+            var wsq = original.Take(start).Concat(table).Concat(original.Skip(end)).ToArray();
+
+            Assert.Throws<WsqException>(() => WsqCodec.Decode(wsq));
+            AssertSampleStillDecodes();
+        }
+
         [Theory]
         [InlineData(SobMarker)]     // block header: the next byte becomes a Huffman table id
         [InlineData(DttMarker)]     // transform table read from compressed data

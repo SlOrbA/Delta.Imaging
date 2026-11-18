@@ -3,3 +3,4 @@
 Delta.Wsq/nbis/patches/*.patch  -text
 Delta.Wsq/nbis/nbis-source.env  text eol=lf
 *.sh                            text eol=lf
+Delta.Wsq/nbis/lib*/SOURCE      text eol=lf
