@@ -90,7 +90,6 @@ and `lib64/` contents over the files here.
 
 - Windows (the build must happen on Windows)
 - [MSYS2](https://www.msys2.org/) installed (e.g. to `C:\msys64`)
-- [CMake for Windows](https://cmake.org/download/) added to PATH
 - [Visual Studio 2022](https://visualstudio.microsoft.com/) with C++ workload
 
 ### Step 1: Install MinGW toolchains in MSYS2
@@ -99,16 +98,21 @@ Open an **MSYS2 MSYS** shell (not MinGW64) and run:
 
 ```bash
 pacman -Syu
-pacman -S mingw-w64-x86_64-gcc mingw-w64-i686-gcc make cmake git
+pacman -S mingw-w64-x86_64-gcc mingw-w64-i686-gcc make git
 ```
+
+CMake is not needed: in NBIS only the OpenJPEG library is built with it, and `--STDLIBS`
+(below) leaves that library out. The CI build installs exactly these packages, without `git`,
+which it takes from the runner.
 
 ### Step 2: Build the 32-bit static libraries
 
 Open an **MSYS2 MinGW32** shell (`mingw32.exe`) and run:
 
 ```bash
-git clone https://github.com/lessandro/nbis
-cd nbis
+mkdir -p /c/NBISBuild32
+git clone https://github.com/lessandro/nbis nbis-32
+cd nbis-32
 # The commit and the patches the committed libraries are built from
 # (NBIS_COMMIT in Delta.Wsq/nbis/nbis-source.env):
 git checkout 3d3b05f0144b706bed56407957bc00779baf2fa5
@@ -118,23 +122,31 @@ git apply --whitespace=nowarn /path/to/Delta.Imaging/Delta.Wsq/nbis/patches/*.pa
 sed -i 's/^\(CFLAGS.*:=\)/\1 -fcommon/' rules.mak
 make config
 make it
+make install
 ```
 
-The compiled `.a` files will be in `C:/NBISBuild32/lib/`.
+`make install` copies the compiled `.a` files to `C:/NBISBuild32/lib/`.
 
 ### Step 3: Build the 64-bit static libraries
 
 Open an **MSYS2 MinGW64** shell (`mingw64.exe`) and run:
 
 ```bash
-cd nbis   # same clone as above
+mkdir -p /c/NBISBuild64
+# A second, clean source tree: setup.sh rewrites files in the tree (rules.mak,
+# arch.mak, ...) and the 32-bit object files would otherwise be reused.
+git clone https://github.com/lessandro/nbis nbis-64
+cd nbis-64
+git checkout 3d3b05f0144b706bed56407957bc00779baf2fa5
+git apply --whitespace=nowarn /path/to/Delta.Imaging/Delta.Wsq/nbis/patches/*.patch
 ./setup.sh C:/NBISBuild64 --MSYS --STDLIBS --64
 sed -i 's/^\(CFLAGS.*:=\)/\1 -fcommon/' rules.mak
 make config
 make it
+make install
 ```
 
-The compiled `.a` files will be in `C:/NBISBuild64/lib/`.
+`make install` copies the compiled `.a` files to `C:/NBISBuild64/lib/`.
 
 ### Step 4: Copy results into this repository
 
