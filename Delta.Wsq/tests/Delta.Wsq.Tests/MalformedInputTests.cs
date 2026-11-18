@@ -233,6 +233,35 @@ namespace Delta.Wsq.Tests
             AssertSampleStillDecodes();
         }
 
+        // The largest Huffman table NBIS accepts has 257 values; building its
+        // code list wrote one entry past the allocated buffer.
+        [Theory]
+        [InlineData(8, 2, 16, 255)]     // 257 values
+        [InlineData(15, 2, 16, 255)]    // 257 values
+        [InlineData(8, 1, 16, 255)]     // 256 values
+        public void Decode_LargestHuffmanTable_DoesNotCrash(int length1, int count1, int length2, int count2)
+        {
+            var original = LoadSample("fp.wsq");
+            var start = FindSegment(original, DhtMarker);
+            var end = start + 2 + ((original[start + 2] << 8) | original[start + 3]);
+
+            var values = count1 + count2;
+            var length = 2 + 1 + 16 + values;
+            var table = new byte[2 + length];
+            table[0] = DhtMarker >> 8;
+            table[1] = DhtMarker & 0xFF;
+            table[2] = (byte)(length >> 8);
+            table[3] = (byte)length;
+            table[4] = original[start + 4];             // same table id
+            table[4 + length1] = (byte)count1;          // number of codes of each length
+            table[4 + length2] = (byte)count2;
+            for (var i = 0; i < values; i++)
+                table[21 + i] = (byte)i;
+
+            DecodeDamaged(original.Take(start).Concat(table).Concat(original.Skip(end)).ToArray());
+            AssertSampleStillDecodes();
+        }
+
         [Theory]
         [InlineData(SobMarker)]     // block header: the next byte becomes a Huffman table id
         [InlineData(DttMarker)]     // transform table read from compressed data

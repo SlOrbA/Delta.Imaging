@@ -6,7 +6,10 @@
 // of damaged data must neither crash, hang, nor leave the decoder (which keeps
 // its state in globals) unable to decode a valid file.
 //
-// usage: fuzz [-q] [-j jobs] <file.wsq>...
+// usage: fuzz [-q] [-j jobs] [-m text] <file.wsq>...
+//   -q       print only the first failures of each file
+//   -j jobs  number of parallel child processes (default: all processors)
+//   -m text  run only the mutations whose name contains text
 // exit code: 0 if no mutation failed, 1 otherwise. See run.sh.
 
 #include <stdio.h>
@@ -100,6 +103,24 @@ static Bytes transform_table(int hisz, int losz, bool random_coefficients)
 	segment.push_back((unsigned char)losz);
 	for (int i = 0; i < 6 * coefficients; i++)
 		segment.push_back(random_coefficients ? (unsigned char)rng() : (unsigned char)(i % 6 == 1 ? 9 : i % 6 == 5 ? 1 : 0));
+	return segment;
+}
+
+// A well-formed Huffman table segment: marker, length, table id, the number
+// of codes of each length 1..16, then one value per code.
+static Bytes huffman_table(int table_id, const int counts[16], bool random_values)
+{
+	int values = 0;
+	for (int i = 0; i < 16; i++) values += counts[i];
+	const int length = 2 + 1 + 16 + values;
+	Bytes segment;
+	segment.push_back((unsigned char)(DHT_WSQ >> 8));
+	segment.push_back((unsigned char)DHT_WSQ);
+	segment.push_back((unsigned char)(length >> 8));
+	segment.push_back((unsigned char)length);
+	segment.push_back((unsigned char)table_id);
+	for (int i = 0; i < 16; i++) segment.push_back((unsigned char)counts[i]);
+	for (int i = 0; i < values; i++) segment.push_back(random_values ? (unsigned char)rng() : (unsigned char)i);
 	return segment;
 }
 
@@ -253,6 +274,47 @@ static std::vector<Mutation> mutations(const Bytes& original)
 		}
 	}
 
+	// Well-formed Huffman tables at and around the largest size NBIS stores
+	// (257 values), with valid and with impossible code length counts.
+	static const int tables[][16] = {
+		{ 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 255 },     // 257 values
+		{ 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 255 },     // 256 values
+		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 255 },     // 257 values
+		{ 255, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },     // 257 one- and two-bit codes
+		{ 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },       // complete after one bit
+		{ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },       // no codes at all
+		{ 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16 },
+		{ 0, 1, 5, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0 },
+	};
+	const size_t huffman = find_segment(original, DHT_WSQ);
+	if (huffman != 0)
+	{
+		const size_t huffman_end = huffman + 2 + ((original[huffman + 2] << 8) | original[huffman + 3]);
+		const int table_id = original[huffman + 4];
+		int n = 0;
+		for (const auto& counts : tables)
+		{
+			for (int variant = 0; variant < 4; variant++, n++)
+			{
+				const Bytes segment = huffman_table(variant < 2 ? table_id : variant == 2 ? 7 : 8, counts, variant % 2 == 1);
+
+				Bytes data(original.begin(), original.begin() + huffman);
+				data.insert(data.end(), segment.begin(), segment.end());
+				data.insert(data.end(), original.begin() + huffman_end, original.end());
+				snprintf(name, sizeof name, "huffman table %d, variant %d", n / 4, variant);
+				add(all, name, data);
+
+				const size_t offset = headers + rng() % (size - headers);
+				data = original;
+				data.insert(data.begin() + offset, segment.begin(), segment.end());
+				snprintf(name, sizeof name, "huffman table %d, variant %d inserted at %zu", n / 4, variant, offset);
+				add(all, name, data);
+			}
+		}
+	}
+
 	// Frame dimensions: around the smallest supported image, around the
 	// limits of the 16-bit types NBIS uses, and far beyond the data.
 	static const int dimensions[] = { 0, 1, 32, 33, 34, 255, 256, 1000, 0x7FFF, 0x8000, 0xB505, 0xFFFF };
@@ -323,11 +385,13 @@ int main(int argc, char** argv)
 {
 	bool quiet = false;
 	int jobs = (int)sysconf(_SC_NPROCESSORS_ONLN);
+	const char* only = nullptr;
 	int failures = 0, total = 0;
 	for (int i = 1; i < argc; i++)
 	{
 		if (strcmp(argv[i], "-q") == 0) { quiet = true; continue; }
 		if (strcmp(argv[i], "-j") == 0 && i + 1 < argc) { jobs = atoi(argv[++i]); continue; }
+		if (strcmp(argv[i], "-m") == 0 && i + 1 < argc) { only = argv[++i]; continue; }
 		if (jobs < 1) jobs = 1;
 
 		const Bytes original = load(argv[i]);
@@ -339,7 +403,15 @@ int main(int argc, char** argv)
 		}
 
 		rng_state = 12345;
-		const std::vector<Mutation> all = mutations(original);
+		std::vector<Mutation> all = mutations(original);
+		if (only)
+		{
+			std::vector<Mutation> selected;
+			for (const Mutation& m : all)
+				if (m.name.find(only) != std::string::npos) selected.push_back(m);
+			all.swap(selected);
+		}
+
 		std::map<pid_t, size_t> running;
 		int failed = 0;
 		size_t next = 0;

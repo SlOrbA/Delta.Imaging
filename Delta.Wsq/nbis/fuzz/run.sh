@@ -2,9 +2,11 @@
 # Builds the nbis wrapper and the NBIS WSQ codec for Linux with
 # AddressSanitizer and fuzzes the decoder with mutated sample files.
 #
-#   run.sh [--unpatched] [work-dir]
+#   run.sh [--unpatched] [work-dir] [fuzz options]
 #
-# --unpatched skips ../patches, to show what the patches fix.
+# --unpatched skips ../patches, to show what the patches fix. Options after
+# the work directory are passed to the fuzzer, e.g. -m "huffman table" to run
+# only the mutations with that text in their name (see fuzz.cpp).
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -12,6 +14,7 @@ nbis_dir="$(dirname "$here")"
 patched=1
 if [ "${1:-}" = "--unpatched" ]; then patched=0; shift; fi
 work="${1:-$(mktemp -d)}"
+if [ $# -gt 0 ]; then shift; fi
 mkdir -p "$work"
 
 # shellcheck source=../nbis-source.env
@@ -56,7 +59,7 @@ g++ "${flags[@]}" -std=c++17 -D'__declspec(x)=' -D__cdecl= -DNISTWSQ_EXPORTS \
 samples=("$nbis_dir"/../tests/TestApplication/Images/fp.wsq "$nbis_dir"/../images/finger.wsq "$nbis_dir"/../images/nores.wsq)
 # allocator_may_return_null: a file may claim an image too large to allocate;
 # the decoder has to handle the failed allocation.
-ASAN_OPTIONS=detect_leaks=0:abort_on_error=0:exitcode=9:allocator_may_return_null=1 "$work/fuzz" -q "${samples[@]}" 2> "$work/asan.log" && status=0 || status=$?
+ASAN_OPTIONS=detect_leaks=0:abort_on_error=0:exitcode=9:allocator_may_return_null=1 "$work/fuzz" -q "$@" "${samples[@]}" 2> "$work/asan.log" && status=0 || status=$?
 
 if [ "$status" != 0 ]; then
   echo "--- distinct AddressSanitizer findings ---"

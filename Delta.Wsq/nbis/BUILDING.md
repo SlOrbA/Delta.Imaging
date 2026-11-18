@@ -196,13 +196,15 @@ hosts the DLL. Two layers prevent that:
 [`fuzz/run.sh`](fuzz/run.sh) builds the wrapper and the patched NBIS sources for Linux with
 AddressSanitizer and decodes about 37 000 mutations of the sample files (truncations, changed
 header bytes, damaged and overwritten image data, inserted markers, well-formed transform
-tables with other filter lengths, frame dimensions around the limits of the integer types). Every mutation must be
+tables with other filter lengths, Huffman tables of the largest size, frame dimensions around
+the limits of the integer types). Every mutation must be
 decoded or rejected without a memory error or a hang, and the unmodified file must decode to
 the same pixels afterwards. It needs `git`, `gcc` and `g++`:
 
 ```bash
 Delta.Wsq/nbis/fuzz/run.sh               # patched sources: must report 0 failed
 Delta.Wsq/nbis/fuzz/run.sh --unpatched   # what the patches fix
+Delta.Wsq/nbis/fuzz/run.sh --unpatched /tmp/fuzz -m "huffman table"   # only these mutations
 ```
 
 `build-nbis-dll.yml` runs it together with the source build: on pull requests that change the

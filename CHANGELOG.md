@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- The NBIS WSQ decoder no longer crashes the process on corrupted image data. The static libraries are now built from patched NBIS sources (`Delta.Wsq/nbis/patches`): Huffman table ids, Huffman codes and the number of decoded coefficients are bounds-checked, tables that appear in the middle of the compressed data are validated like those in the header, an invalid transform table no longer leads to a double free, and frame dimensions the decoder cannot represent are rejected. Such files now fail with `WsqException` (#32)
+- The NBIS WSQ decoder no longer crashes the process on corrupted image data. The static libraries are now built from patched NBIS sources (`Delta.Wsq/nbis/patches`): Huffman table ids, Huffman codes and the number of decoded coefficients are bounds-checked, tables that appear in the middle of the compressed data are validated like those in the header, an invalid transform table no longer leads to a double free, a Huffman table of the largest size no longer overflows its code list, and frame dimensions the decoder cannot represent are rejected. Such files now fail with `WsqException` (#32)
 - The decoder only accepts transform tables with the filter lengths of the standard WSQ filter pair (9 and 7). The NBIS reconstruction reads outside its buffers for other lengths. Files using another filter, which NBIS may have decoded before, are now rejected with `WsqException` (#32)
 - Images of more than about 536 million pixels are rejected instead of overflowing the 32-bit pixel count (#32)
 

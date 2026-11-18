@@ -1,3 +1,30 @@
+diff --git a/imgtools/src/lib/jpegl/huff.c b/imgtools/src/lib/jpegl/huff.c
+index a86618d..332a2f2 100644
+--- a/imgtools/src/lib/jpegl/huff.c
++++ b/imgtools/src/lib/jpegl/huff.c
+@@ -699,7 +699,9 @@ int build_huffsizes(HUFFCODE **ohuffcode_table, int *temp_size,
+    int code_size;               /*code sizes*/
+    int number_of_codes = 1;     /*the number codes for a given code size*/
+ 
+-   huffcode_table = (HUFFCODE *)calloc(max_huffcounts+1, sizeof(HUFFCODE));
++   /* One entry more than the largest table (max_huffcounts+1 codes): */
++   /* the list is terminated by an entry of size 0.                   */
++   huffcode_table = (HUFFCODE *)calloc(max_huffcounts+2, sizeof(HUFFCODE));
+    if(huffcode_table == (HUFFCODE *)NULL){
+       fprintf(stderr, "ERROR : build_huffsizes : calloc : huffcode_table\n");
+       return(-2);
+@@ -709,6 +711,11 @@ int build_huffsizes(HUFFCODE **ohuffcode_table, int *temp_size,
+ 
+    for(code_size = 1; code_size <= MAX_HUFFBITS; code_size++) {
+       while(number_of_codes <= huffbits[code_size - 1]) {
++         if(*temp_size > max_huffcounts){
++            fprintf(stderr, "ERROR : build_huffsizes : too many huffman codes\n");
++            free(huffcode_table);
++            return(-3);
++         }
+ 	 (huffcode_table + *temp_size)->size = code_size;
+ 	 (*temp_size)++;
+ 	 number_of_codes++;
 diff --git a/imgtools/src/lib/wsq/decoder.c b/imgtools/src/lib/wsq/decoder.c
 index 17acbbf..4363aff 100644
 --- a/imgtools/src/lib/wsq/decoder.c
