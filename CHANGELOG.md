@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.4.0] - 2026-11-17
+## [1.4.0] - 2026-11-18
 
 ### Added
 - Releases include `Delta.Wsq-<version>.zip`: `Delta.Wsq.dll`, stamped with the version of the release tag, with its PDB and XML documentation, together with `nbis32.dll` and `nbis64.dll`. Until now the library had to be built from source and reported version 1.1.0.0 regardless of the release (#24)
@@ -131,7 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Notable Changes |
 |---------|------|-----------------|
-| 1.4.0 | 2026-11-17 | Input validation, thread safety, 32/64-bit P/Invoke fixes, versioned library zip |
+| 1.4.0 | 2026-11-18 | Input validation, thread safety, 32/64-bit P/Invoke fixes, versioned library zip |
 | 1.3.3 | 2026-11-16 | NBIS debug output disabled |
 | 1.3.2 | 2026-11-16 | Debug builds fixed, fail-early CI, release workflow |
 | 1.3.1 | 2026-11-16 | Modern NBIS static libraries committed and published |
