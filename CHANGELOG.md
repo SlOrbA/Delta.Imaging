@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-18
+
 ### Added
 - Releases include `Delta.Wsq-<version>.zip`: `Delta.Wsq.dll`, stamped with the version of the release tag, with its PDB and XML documentation, together with `nbis32.dll` and `nbis64.dll`. Until now the library had to be built from source and reported version 1.1.0.0 regardless of the release (#24)
 - CI builds every project in the repository (`Delta.Wsq.sln` in all four configurations, `Delta.ImageRenameTool.sln`) and runs the tests as a 32-bit process in addition to 64-bit (#23)
@@ -31,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A process that is neither x86 nor x64 (e.g. ARM64) gets a `PlatformNotSupportedException` that says so, instead of a `BadImageFormatException` from loading the x64 DLL (#25)
 - Null arguments are reported with `ArgumentNullException` (a subclass of the `ArgumentException` thrown before) (#28)
 - Delta.ImageRenameTool: selecting another image while a preview is loading no longer calls `Thread.Abort`, which throws on .NET (#28)
+- Delta.ImageRenameTool: a preview that is still loading is dropped when the preview is switched off or the window is closed
 
 ### Removed
 - `IMPROVEMENTS.md` and `FUTURE_IMPROVEMENTS.md`: mostly completed work; planning now happens in GitHub issues (#27)
@@ -128,6 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Notable Changes |
 |---------|------|-----------------|
+| 1.4.0 | 2026-11-18 | Input validation, thread safety, 32/64-bit P/Invoke fixes, versioned library zip |
 | 1.3.3 | 2026-11-16 | NBIS debug output disabled |
 | 1.3.2 | 2026-11-16 | Debug builds fixed, fail-early CI, release workflow |
 | 1.3.1 | 2026-11-16 | Modern NBIS static libraries committed and published |
@@ -142,10 +146,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Use the new nbis32.dll / nbis64.dll (v1.2.0+): static CRT, no Visual C++ Redistributable needed
 - The v1.1.0 DLLs still work but require the VC++ 2010 Redistributable
 
-### From 1.3.x → next release
+### From 1.3.x → 1.4.0
+- Replace `nbis32.dll` and `nbis64.dll` together with `Delta.Wsq.dll`. The validation of WSQ data and the other decoder fixes are in the native DLLs: `Delta.Wsq.dll` 1.4.0 with the 1.3.x native DLLs still crashes on damaged files
 - `WsqCodec.Encode` throws `ArgumentException` / `ArgumentOutOfRangeException` for input it previously passed to the native encoder unchecked: images smaller than 33 x 33 pixels, a depth other than 8 bpp, too little pixel data, a non-positive bit rate
+- `WsqCodec.GetComments` returns an empty array for a file whose header is damaged (a marker segment outside the data, a malformed transform, quantization or Huffman table, frame header or block header), even when the comment segments themselves are intact. 1.3.x could return the comments of some such files
 - Debug builds of `Delta.Wsq` load `nbis32.dll` / `nbis64.dll`; `nbis32d.dll` / `nbis64d.dll` are no longer used
 - The version of `Delta.Wsq.dll` follows the release tag (it was 1.1.0.0 in every release so far)
+- Converted images can differ from earlier versions where those were wrong:
+  - `Conversions.To8bppBitmap` (and `WsqEncoder.EncodeGdi` with `autoConvertToGrayscale`, the default), `Conversions.WpfImageToImageInfo` and `ToGray8BitmapSource` convert 8 bpp indexed images through their palette colors. This changes the result for every palette other than the identity grayscale palette (entry *i* = gray level *i*): colored palettes, but also grayscale palettes in another order, such as an inverted one
+  - `Conversions.GdiImageToImageInfo`, and `EncodeGdi` with `autoConvertToGrayscale: false`, are unchanged: they still use the palette indexes as gray levels
+  - Resolutions are rounded instead of truncated (499.9998 dpi becomes 500 ppi, not 499)
+- Calls into the nbis DLL run one at a time per process; code that encoded or decoded on several threads keeps working but no longer runs in parallel
 
 ## Future Plans
 
