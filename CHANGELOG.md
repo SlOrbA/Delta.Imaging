@@ -149,6 +149,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### From 1.3.x → 1.4.0
 - Replace `nbis32.dll` and `nbis64.dll` together with `Delta.Wsq.dll`. The validation of WSQ data and the other decoder fixes are in the native DLLs: `Delta.Wsq.dll` 1.4.0 with the 1.3.x native DLLs still crashes on damaged files
 - `WsqCodec.Encode` throws `ArgumentException` / `ArgumentOutOfRangeException` for input it previously passed to the native encoder unchecked: images smaller than 33 x 33 pixels, a depth other than 8 bpp, too little pixel data, a non-positive bit rate
+- `WsqCodec.GetComments` returns an empty array for a file whose header is damaged (a marker segment outside the data, a malformed transform, quantization or Huffman table, frame header or block header), even when the comment segments themselves are intact. 1.3.x could return the comments of some such files
 - Debug builds of `Delta.Wsq` load `nbis32.dll` / `nbis64.dll`; `nbis32d.dll` / `nbis64d.dll` are no longer used
 - The version of `Delta.Wsq.dll` follows the release tag (it was 1.1.0.0 in every release so far)
 - Converted images can differ from earlier versions where those were wrong:
