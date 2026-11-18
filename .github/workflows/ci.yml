@@ -60,6 +60,15 @@ jobs:
               status=1
             fi
           done < <(grep -oE 'lib(32|64).lib[a-z0-9]+[.]a' nbis.vcxproj | sort -u)
+
+          # The libraries must be built from the patched sources (patches/):
+          # look for an error message that only the patches add.
+          for lib in lib32/libwsq.a lib64/libwsq.a; do
+            if ! grep -a -q 'invalid subband geometry' "$lib"; then
+              echo "::error file=Delta.Wsq/nbis/$lib::not built from the patched NBIS sources (Delta.Wsq/nbis/patches)"
+              status=1
+            fi
+          done
           exit $status
 
   # ── Stage 2: native DLL ────────────────────────────────────────────────────

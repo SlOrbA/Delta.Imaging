@@ -170,6 +170,78 @@ namespace Delta.Wsq.Tests
             AssertSampleStillDecodes();
         }
 
+        // ── Damage that only shows while decoding (#32) ──────────────────────
+        // Found by the fuzzer in Delta.Wsq/nbis/fuzz: each of these made the
+        // unpatched NBIS decoder access memory outside its buffers.
+
+        // Decodes damaged data: it may decode (to a wrong image) or be
+        // rejected, but must not take the process down.
+        private static void DecodeDamaged(byte[] wsq)
+        {
+            try
+            {
+                var image = WsqCodec.Decode(wsq);
+                Assert.Equal(image.Width * image.Height, image.Data.Length);
+            }
+            catch (WsqException exception)
+            {
+                Assert.NotEqual(0, exception.ErrorCode);
+            }
+        }
+
+        [Theory]
+        [InlineData(6)]     // high byte of the height
+        [InlineData(8)]     // high byte of the width
+        public void Decode_FrameDimensionsFarBeyondTheData_Throws(int offsetInFrameHeader)
+        {
+            var wsq = LoadSample("fp.wsq");
+            wsq[FindSegment(wsq, SofMarker) + offsetInFrameHeader] = 0xFF;
+
+            Assert.Throws<WsqException>(() => WsqCodec.Decode(wsq));
+            AssertSampleStillDecodes();
+        }
+
+        [Theory]
+        [InlineData(SobMarker)]     // block header: the next byte becomes a Huffman table id
+        [InlineData(DttMarker)]     // transform table read from compressed data
+        [InlineData(DqtMarker)]
+        [InlineData(DhtMarker)]
+        public void Decode_MarkerInsideTheCompressedData_DoesNotCrash(int marker)
+        {
+            var original = LoadSample("fp.wsq");
+            var dataStart = FindSegment(original, SobMarker) + 5;
+
+            for (var offset = dataStart; offset < original.Length - 1; offset += 97)
+            {
+                var wsq = (byte[])original.Clone();
+                wsq[offset] = (byte)(marker >> 8);
+                wsq[offset + 1] = (byte)marker;
+                DecodeDamaged(wsq);
+            }
+
+            AssertSampleStillDecodes();
+        }
+
+        [Fact]
+        public void Decode_DamagedCompressedData_DoesNotCrash()
+        {
+            var original = LoadSample("fp.wsq");
+            var dataStart = FindSegment(original, SobMarker) + 5;
+            var random = new Random(32);
+
+            for (var i = 0; i < 300; i++)
+            {
+                var wsq = (byte[])original.Clone();
+                var offset = random.Next(dataStart, wsq.Length);
+                var length = random.Next(1, 16);
+                for (var k = offset; k < offset + length && k < wsq.Length; k++)
+                    wsq[k] = (byte)random.Next(256);
+                DecodeDamaged(wsq);
+            }
+
+            AssertSampleStillDecodes();
+        }
+
         [Fact]
         public void GetComments_TruncatedAnywhereInTheHeaders_Throws()
         {

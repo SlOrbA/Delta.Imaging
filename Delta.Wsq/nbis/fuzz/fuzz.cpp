@@ -1,0 +1,288 @@
+// Fuzzer for the nbis wrapper (nistwsq.cpp) and the NBIS WSQ decoder.
+//
+// Mutates valid WSQ files and feeds every mutation to wsq_decode and
+// wsq_get_comments, built with AddressSanitizer. Each mutation runs in its own
+// child process, which afterwards decodes the unmodified file again: a decode
+// of damaged data must neither crash, hang, nor leave the decoder (which keeps
+// its state in globals) unable to decode a valid file.
+//
+// usage: fuzz [-q] [-j jobs] <file.wsq>...
+// exit code: 0 if no mutation failed, 1 otherwise. See run.sh.
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <signal.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
+#include <map>
+#include <string>
+#include <vector>
+
+#include "nistwsq.h"
+
+extern "C" { int debug = 0; }   // NBIS progress messages off, as in mingw_shim.cpp
+
+typedef std::vector<unsigned char> Bytes;
+
+static const int TIMEOUT_SECONDS = 15;
+static const int EXIT_STATE_DAMAGED = 3;
+
+struct Mutation
+{
+	std::string name;
+	Bytes data;
+};
+
+static Bytes load(const char* path)
+{
+	FILE* f = fopen(path, "rb");
+	if (!f) { perror(path); exit(2); }
+	Bytes data;
+	unsigned char chunk[65536];
+	size_t n;
+	while ((n = fread(chunk, 1, sizeof chunk, f)) > 0)
+		data.insert(data.end(), chunk, chunk + n);
+	fclose(f);
+	return data;
+}
+
+// Small deterministic generator: the same mutations on every run and platform.
+static unsigned int rng_state;
+static unsigned int rng()
+{
+	rng_state = rng_state * 1664525u + 1013904223u;
+	return rng_state >> 8;
+}
+
+// Offset of the first Start Of Block marker, or the file size.
+static size_t headers_end(const Bytes& d)
+{
+	size_t pos = 2;
+	while (pos + 4 <= d.size())
+	{
+		const int marker = (d[pos] << 8) | d[pos + 1];
+		if (marker == SOB_WSQ)
+			return pos + 5 <= d.size() ? pos + 5 : d.size();
+		pos += 2 + ((d[pos + 2] << 8) | d[pos + 3]);
+	}
+	return d.size();
+}
+
+static bool decode(const Bytes& in, Bytes* pixels)
+{
+	// A heap copy of exactly the right size, so AddressSanitizer sees every
+	// read outside the input.
+	unsigned char* copy = (unsigned char*)malloc(in.size() ? in.size() : 1);
+	memcpy(copy, in.data(), in.size());
+
+	unsigned char* out = nullptr;
+	int w = 0, h = 0, depth = 0, ppi = 0, lossy = 0;
+	const int ret = wsq_decode(&out, &w, &h, &depth, &ppi, &lossy, copy, (int)in.size());
+	if (ret == 0)
+	{
+		if (pixels)
+			pixels->assign(out, out + (size_t)w * h);
+		else
+		{
+			// Touch every pixel: the buffer must really be w * h bytes.
+			volatile unsigned sum = 0;
+			for (size_t i = 0; i < (size_t)w * h; i++) sum += out[i];
+		}
+		free_mem(out);
+	}
+
+	unsigned char** comments = nullptr;
+	int count = 0;
+	if (wsq_get_comments(&comments, &count, copy, (int)in.size()) == 0)
+	{
+		for (int i = 0; i < count; i++) free_mem(comments[i]);
+		free_mem(comments);
+	}
+
+	free(copy);
+	return ret == 0;
+}
+
+static void add(std::vector<Mutation>& all, const std::string& name, const Bytes& data)
+{
+	all.push_back(Mutation{ name, data });
+}
+
+static std::vector<Mutation> mutations(const Bytes& original)
+{
+	std::vector<Mutation> all;
+	const size_t headers = headers_end(original);
+	const size_t size = original.size();
+	char name[128];
+
+	// Truncation: every length in the headers, then sampled lengths.
+	for (size_t length = 0; length <= headers && length < size; length++)
+	{
+		snprintf(name, sizeof name, "truncate to %zu", length);
+		add(all, name, Bytes(original.begin(), original.begin() + length));
+	}
+	for (int i = 0; i < 400; i++)
+	{
+		const size_t length = headers + rng() % (size - headers);
+		snprintf(name, sizeof name, "truncate to %zu", length);
+		add(all, name, Bytes(original.begin(), original.begin() + length));
+	}
+
+	// Every header byte: several replacement values.
+	static const int patterns[] = { 0x00, 0xFF, 0x01, 0x80, 0x7F, -1 /* flip all bits */, -2 /* +1 */ };
+	for (size_t offset = 0; offset < headers; offset++)
+	{
+		for (int pattern : patterns)
+		{
+			Bytes data = original;
+			const unsigned char old = data[offset];
+			data[offset] = pattern == -1 ? (unsigned char)~old : pattern == -2 ? (unsigned char)(old + 1) : (unsigned char)pattern;
+			if (data[offset] == old) continue;
+			snprintf(name, sizeof name, "header byte %zu: %02X -> %02X", offset, old, data[offset]);
+			add(all, name, data);
+		}
+	}
+
+	// Compressed data: single bytes, bit flips, bursts, inserted markers.
+	for (int i = 0; i < 2000; i++)
+	{
+		Bytes data = original;
+		const size_t offset = headers + rng() % (size - headers);
+		const unsigned char old = data[offset];
+		data[offset] = (unsigned char)rng();
+		snprintf(name, sizeof name, "data byte %zu: %02X -> %02X", offset, old, data[offset]);
+		add(all, name, data);
+	}
+	for (int i = 0; i < 600; i++)
+	{
+		Bytes data = original;
+		const size_t offset = headers + rng() % (size - headers);
+		const int bit = rng() % 8;
+		data[offset] ^= (unsigned char)(1 << bit);
+		snprintf(name, sizeof name, "data bit %zu.%d", offset, bit);
+		add(all, name, data);
+	}
+	for (int i = 0; i < 600; i++)
+	{
+		Bytes data = original;
+		const size_t offset = headers + rng() % (size - headers);
+		const size_t length = 1 + rng() % 64;
+		const int fill = rng() % 4;
+		for (size_t k = offset; k < offset + length && k < size; k++)
+			data[k] = fill == 0 ? 0x00 : fill == 1 ? 0xFF : (unsigned char)rng();
+		snprintf(name, sizeof name, "data burst %zu+%zu (%s)", offset, length, fill == 0 ? "00" : fill == 1 ? "FF" : "random");
+		add(all, name, data);
+	}
+	static const int markers[] = { SOI_WSQ, EOI_WSQ, SOF_WSQ, SOB_WSQ, DTT_WSQ, DQT_WSQ, DHT_WSQ, DRT_WSQ, COM_WSQ };
+	for (int i = 0; i < 450; i++)
+	{
+		Bytes data = original;
+		const size_t offset = headers + rng() % (size - headers - 1);
+		const int marker = markers[i % 9];
+		data[offset] = (unsigned char)(marker >> 8);
+		data[offset + 1] = (unsigned char)marker;
+		snprintf(name, sizeof name, "marker %04X at %zu", marker, offset);
+		add(all, name, data);
+	}
+
+	// Several random bytes anywhere in the file.
+	for (int i = 0; i < 1200; i++)
+	{
+		Bytes data = original;
+		const int changes = 2 + rng() % 6;
+		for (int k = 0; k < changes; k++)
+			data[rng() % size] = (unsigned char)rng();
+		snprintf(name, sizeof name, "%d random bytes, case %d", changes, i);
+		add(all, name, data);
+	}
+
+	return all;
+}
+
+// Starts one mutation in a child process.
+static pid_t start(const Mutation& m, const Bytes& original, const Bytes& expected)
+{
+	const pid_t pid = fork();
+	if (pid < 0) { perror("fork"); exit(2); }
+	if (pid == 0)
+	{
+		alarm(TIMEOUT_SECONDS);
+		decode(m.data, nullptr);
+
+		Bytes again;
+		if (!decode(original, &again) || again != expected)
+			_exit(EXIT_STATE_DAMAGED);
+		_exit(0);
+	}
+
+	return pid;
+}
+
+// What went wrong in a finished child, or an empty string.
+static std::string problem(int status)
+{
+	if (WIFSIGNALED(status))
+		return WTERMSIG(status) == SIGALRM ? "timeout" : std::string("signal ") + strsignal(WTERMSIG(status));
+	if (WEXITSTATUS(status) == EXIT_STATE_DAMAGED)
+		return "the unmodified file no longer decodes correctly afterwards";
+	if (WEXITSTATUS(status) != 0)
+		return "memory error (see the AddressSanitizer log)";
+	return "";
+}
+
+int main(int argc, char** argv)
+{
+	bool quiet = false;
+	int jobs = (int)sysconf(_SC_NPROCESSORS_ONLN);
+	int failures = 0, total = 0;
+	for (int i = 1; i < argc; i++)
+	{
+		if (strcmp(argv[i], "-q") == 0) { quiet = true; continue; }
+		if (strcmp(argv[i], "-j") == 0 && i + 1 < argc) { jobs = atoi(argv[++i]); continue; }
+		if (jobs < 1) jobs = 1;
+
+		const Bytes original = load(argv[i]);
+		Bytes expected;
+		if (!decode(original, &expected))
+		{
+			fprintf(stderr, "%s: does not decode\n", argv[i]);
+			return 2;
+		}
+
+		rng_state = 12345;
+		const std::vector<Mutation> all = mutations(original);
+		std::map<pid_t, size_t> running;
+		int failed = 0;
+		size_t next = 0;
+		while (next < all.size() || !running.empty())
+		{
+			while (next < all.size() && (int)running.size() < jobs)
+			{
+				running[start(all[next], original, expected)] = next;
+				next++;
+			}
+
+			int status = 0;
+			const pid_t pid = wait(&status);
+			if (pid < 0) { perror("wait"); return 2; }
+			const size_t index = running[pid];
+			running.erase(pid);
+
+			const std::string what = problem(status);
+			if (what.empty()) continue;
+			failed++;
+			if (!quiet || failed <= 20)
+				printf("FAIL %s: %s: %s\n", argv[i], all[index].name.c_str(), what.c_str());
+		}
+
+		printf("%s: %zu mutations, %d failed\n", argv[i], all.size(), failed);
+		fflush(stdout);
+		total += (int)all.size();
+		failures += failed;
+	}
+
+	printf("total: %d mutations, %d failed\n", total, failures);
+	return failures == 0 ? 0 : 1;
+}

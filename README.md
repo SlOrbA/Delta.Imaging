@@ -46,7 +46,7 @@ foreach (var comment in comments)
 ### Limitations
 
 - Images must be 8 bits per pixel grayscale and at least 33 x 33 pixels (`WsqCodec.Constants.MinImageSize`).
-- The header of a WSQ file is validated before decoding, but the NBIS decoder is not hardened against deliberately corrupted image data. Do not decode untrusted files in a process that must not crash.
+- Damaged or truncated WSQ data is rejected with a `WsqException`. The decoder is fuzzed with corrupted files under AddressSanitizer (see [`Delta.Wsq/nbis/fuzz`](Delta.Wsq/nbis/fuzz)), but a file can still claim a very large image: decoding allocates memory in proportion to the width and height in its header before the data is checked.
 
 ### Thread safety
 

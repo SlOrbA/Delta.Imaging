@@ -68,6 +68,10 @@ steps below) and committed to the repository. CI builds and tests the DLL agains
 these committed files. To build the DLL locally you only need
 Visual Studio — skip directly to Step 6.
 
+The libraries are not built from the unmodified NBIS sources: the NBIS commit named in
+[`nbis-source.env`](nbis-source.env) is patched with the files in [`patches/`](patches)
+before it is compiled. See [Patches and fuzzing](#patches-and-fuzzing).
+
 The same libraries are also available without cloning the repository:
 
 - every `build-nbis-dll.yml` run uploads the libraries it linked against as the
@@ -105,6 +109,10 @@ Open an **MSYS2 MinGW32** shell (`mingw32.exe`) and run:
 ```bash
 git clone https://github.com/lessandro/nbis
 cd nbis
+# The commit and the patches the committed libraries are built from
+# (NBIS_COMMIT in Delta.Wsq/nbis/nbis-source.env):
+git checkout 3d3b05f0144b706bed56407957bc00779baf2fa5
+git apply --whitespace=nowarn /path/to/Delta.Imaging/Delta.Wsq/nbis/patches/*.patch
 ./setup.sh C:/NBISBuild32 --MSYS --STDLIBS --32
 # GCC >= 10 defaults to -fno-common; NBIS defines globals in headers so we must add -fcommon:
 sed -i 's/^\(CFLAGS.*:=\)/\1 -fcommon/' rules.mak
@@ -167,6 +175,40 @@ KERNEL32.dll
 
 If `msvcr100.dll`, `vcruntime140.dll`, `msvcrt.dll` or any other CRT DLL appears, the build is
 not clean.
+
+---
+
+## Patches and fuzzing
+
+The NBIS WSQ decoder trusts the data it reads. Corrupted files made it read and write outside
+its buffers, free memory twice or dereference null pointers, which takes down the process that
+hosts the DLL. Two layers prevent that:
+
+- `nistwsq.cpp` (`wsq_validate_stream`) checks the structure of the marker segments before a
+  stream is handed to NBIS.
+- [`patches/`](patches) fixes the decoder itself, for damage that only shows while the image
+  data is decoded: table ids, Huffman codes and coefficient counts are bounds-checked, tables
+  read from the middle of the data are validated, and the subband geometry is checked before
+  it is used.
+
+[`fuzz/run.sh`](fuzz/run.sh) builds the wrapper and the patched NBIS sources for Linux with
+AddressSanitizer and decodes about 35 000 mutations of the sample files (truncations, changed
+header bytes, damaged and overwritten image data, inserted markers). Every mutation must be
+decoded or rejected without a memory error or a hang, and the unmodified file must decode to
+the same pixels afterwards. It needs `git`, `gcc` and `g++`:
+
+```bash
+Delta.Wsq/nbis/fuzz/run.sh               # patched sources: must report 0 failed
+Delta.Wsq/nbis/fuzz/run.sh --unpatched   # what the patches fix
+```
+
+`build-nbis-dll.yml` runs it together with the source build: on pull requests that change the
+patches, the wrapper, the fuzzer or the workflow, weekly and on demand. `ci.yml` checks that
+the committed libraries were built from the patched sources.
+
+To change the decoder: edit a clone of NBIS at the pinned commit, write the result of
+`git diff` to a new file in `patches/`, run the fuzzer, and refresh the committed libraries
+from the `nbis-static-libs` artifact of the source build of your pull request.
 
 ---
 
