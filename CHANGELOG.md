@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `WsqCodec.Encode`, `Decode` and `GetComments` (and `WsqEncoder` / `WsqDecoder`, which call them) throw the new `WsqException` when the native codec fails, instead of returning an empty array or an empty image. `WsqException.ErrorCode` carries the error code of the nbis DLL. Null or empty input to the `WsqCodec` methods still gives an empty result and is not an error; `WsqDecoder` keeps throwing `ArgumentNullException` for it (#22)
 - **Breaking:** `WsqDecoder.DecodeGdi` / `DecodeWpf` throw `WsqException` for data that cannot be decoded; they threw `ArgumentException` ("The image is empty") before (#22)
 - `RawImageData.Empty` returns a new instance on every call. It was a single shared instance whose properties any caller could change for everyone else. It is now a property instead of a field: recompile code that uses it (#22)
+- The nbis DLL reports WSQ data of 1–3 bytes as a malformed stream (`WSQ_ERR_MALFORMED_STREAM`) instead of an invalid argument, which is reserved for null pointers and non-positive lengths (#22)
 
 ## [1.4.0] - 2026-11-18
 
@@ -164,6 +165,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Calls into the nbis DLL run one at a time per process; code that encoded or decoded on several threads keeps working but no longer runs in parallel
 
 ### From 1.4.x → next release
+- Replace `nbis32.dll` and `nbis64.dll` together with `Delta.Wsq.dll`. The library also loads the 1.4.x native DLLs, but those report data of 1–3 bytes as `WsqException.InvalidArgument` instead of `MalformedStream`
 - A failed encode, decode or comment read throws `WsqException`. Code that checked for an empty result (`result.IsEmpty`, `result.Length == 0`) to detect undecodable data has to catch `WsqException` instead; `ErrorCode` tells why it failed. `WsqCodec.Encode` and `Decode` now return an empty result only for null or empty input. `WsqCodec.GetComments` also returns an empty array for a valid WSQ file that has no comments
 - Code that caught `ArgumentException` around `WsqDecoder.DecodeGdi` / `DecodeWpf` for undecodable data has to catch `WsqException`
 - Do not compare against `RawImageData.Empty` by reference; use `IsEmpty`
