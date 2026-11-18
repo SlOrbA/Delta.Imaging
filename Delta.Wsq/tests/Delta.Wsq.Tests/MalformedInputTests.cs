@@ -71,7 +71,6 @@ namespace Delta.Wsq.Tests
             Assert.Throws<ArgumentException>(() => WsqCodec.Encode(image, 0.75f, null));
         }
 
-        [Fact]
         private static void AssertFails(int expectedErrorCode, Action action)
         {
             var exception = Assert.Throws<WsqException>(action);
