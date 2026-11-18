@@ -18,6 +18,7 @@ namespace Delta.Wsq
         /// dimensions require.</exception>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="bitrate"/> is not a
         /// positive finite number.</exception>
+        /// <exception cref="WsqException">The native encoder failed.</exception>
         public static byte[] Encode(RawImageData image, float bitrate, string comment)
         {
             if (image == null || image.IsEmpty)
@@ -54,12 +55,12 @@ namespace Delta.Wsq
                     out outputDataPtr, out outputLength, bitrate, inputDataPtr, image.Width, image.Height,
                     image.PixelDepth, image.Resolution, comment ?? string.Empty);
 
-                if (result == 0) // ok
-                {
-                    var outputData = new byte[outputLength];
-                    Marshal.Copy(outputDataPtr, outputData, 0, outputLength);
-                    return outputData;
-                }
+                if (result != 0)
+                    throw WsqException.For("encoding", result);
+
+                var outputData = new byte[outputLength];
+                Marshal.Copy(outputDataPtr, outputData, 0, outputLength);
+                return outputData;
             }
             finally
             {
@@ -68,10 +69,14 @@ namespace Delta.Wsq
                 if (outputDataPtr != IntPtr.Zero)
                     NativeMethods.free_mem(outputDataPtr);
             }
-
-            return Array.Empty<byte>();
         }
 
+        /// <summary>
+        /// Reads the comments stored in WSQ data.
+        /// </summary>
+        /// <param name="data">The WSQ Image data.</param>
+        /// <returns>The comments; an empty array if <paramref name="data"/> is null or empty.</returns>
+        /// <exception cref="WsqException">The data is not a readable WSQ image.</exception>
         public static unsafe string[] GetComments(byte[] data)
         {
             if (data == null || data.Length == 0) 
@@ -92,25 +97,25 @@ namespace Delta.Wsq
                 var result = NativeMethods.wsq_get_comments(
                     out outputCommentPtr, out ccount, inputDataPtr, inputLength);
                 
-                if (result == 0) // ok
-                {
-                    // retrieve image comment.
-                    if (outputCommentPtr != IntPtr.Zero)
-                    {
-                        if (ccount > 0)
-                        {
-                            var commentPtr = (IntPtr*)outputCommentPtr;
-                            for (int i = 0; i < ccount; i++)
-                            {
-                                var ptr = *commentPtr;
-                                comments.Add(Marshal.PtrToStringAnsi(ptr));
-                                NativeMethods.free_mem(ptr);
-                                commentPtr++;
-                            }
-                        }
+                if (result != 0)
+                    throw WsqException.For("comment reading", result);
 
-                        NativeMethods.free_mem(outputCommentPtr);
+                // retrieve image comment.
+                if (outputCommentPtr != IntPtr.Zero)
+                {
+                    if (ccount > 0)
+                    {
+                        var commentPtr = (IntPtr*)outputCommentPtr;
+                        for (int i = 0; i < ccount; i++)
+                        {
+                            var ptr = *commentPtr;
+                            comments.Add(Marshal.PtrToStringAnsi(ptr));
+                            NativeMethods.free_mem(ptr);
+                            commentPtr++;
+                        }
                     }
+
+                    NativeMethods.free_mem(outputCommentPtr);
                 }
             }
             finally
@@ -127,7 +132,8 @@ namespace Delta.Wsq
         /// Decodes the input WSQ data into raw image data.
         /// </summary>
         /// <param name="data">The WSQ Image data.</param>
-        /// <returns>Decoded data.</returns>
+        /// <returns>Decoded data; an empty image if <paramref name="data"/> is null or empty.</returns>
+        /// <exception cref="WsqException">The data is not a decodable WSQ image.</exception>
         public static unsafe RawImageData Decode(byte[] data)
         {
             if (data == null || data.Length == 0)
@@ -147,22 +153,22 @@ namespace Delta.Wsq
                 var result = NativeMethods.wsq_decode(
                     out outputDataPtr, out width, out height, out depth, out dpi, out lossy, inputDataPtr, inputLength);
                 
-                if (result == 0) // ok
-                {                    
-                    int outputLength = width * height;
-                    var outputData = new byte[outputLength];
+                if (result != 0)
+                    throw WsqException.For("decoding", result);
 
-                    // copy decoded data back from native memory
-                    Marshal.Copy(outputDataPtr, outputData, 0, outputLength);
-                    return new RawImageData()
-                    {
-                        Data = outputData,
-                        Width = width,
-                        Height = height,
-                        PixelDepth = depth,
-                        Resolution = dpi
-                    };
-                }
+                int outputLength = width * height;
+                var outputData = new byte[outputLength];
+
+                // copy decoded data back from native memory
+                Marshal.Copy(outputDataPtr, outputData, 0, outputLength);
+                return new RawImageData()
+                {
+                    Data = outputData,
+                    Width = width,
+                    Height = height,
+                    PixelDepth = depth,
+                    Resolution = dpi
+                };
             }
             finally
             {
@@ -174,8 +180,6 @@ namespace Delta.Wsq
                 if (outputDataPtr != IntPtr.Zero)
                     NativeMethods.free_mem(outputDataPtr);
             }
-
-            return RawImageData.Empty;
         }
     }
 }

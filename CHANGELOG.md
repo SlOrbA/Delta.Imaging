@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** `WsqCodec.Encode`, `Decode` and `GetComments` (and `WsqEncoder` / `WsqDecoder`, which call them) throw the new `WsqException` when the native codec fails, instead of returning an empty array or an empty image. `WsqException.ErrorCode` carries the error code of the nbis DLL. Null or empty input still gives an empty result and is not an error (#22)
+- **Breaking:** `WsqDecoder.DecodeGdi` / `DecodeWpf` throw `WsqException` for data that cannot be decoded; they threw `ArgumentException` ("The image is empty") before (#22)
+- `RawImageData.Empty` returns a new instance on every call. It was a single shared instance whose properties any caller could change for everyone else. It is now a property instead of a field: recompile code that uses it (#22)
+
 ## [1.4.0] - 2026-11-18
 
 ### Added
@@ -157,6 +162,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `Conversions.GdiImageToImageInfo`, and `EncodeGdi` with `autoConvertToGrayscale: false`, are unchanged: they still use the palette indexes as gray levels
   - Resolutions are rounded instead of truncated (499.9998 dpi becomes 500 ppi, not 499)
 - Calls into the nbis DLL run one at a time per process; code that encoded or decoded on several threads keeps working but no longer runs in parallel
+
+### From 1.4.x → next release
+- A failed encode, decode or comment read throws `WsqException`. Code that checked for an empty result (`result.IsEmpty`, `result.Length == 0`) to detect undecodable data has to catch `WsqException` instead; `ErrorCode` tells why it failed. Empty results now only occur for null or empty input
+- Code that caught `ArgumentException` around `WsqDecoder.DecodeGdi` / `DecodeWpf` for undecodable data has to catch `WsqException`
+- Do not compare against `RawImageData.Empty` by reference; use `IsEmpty`
 
 ## Future Plans
 
