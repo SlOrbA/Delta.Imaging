@@ -60,9 +60,12 @@ compression ratio or a quality percentage.
   `ArgumentNullException` for it.
 - Calls into the native codec are serialized: the API is safe to use from several threads, but
   encoding and decoding run one at a time per process.
-- The header of a WSQ file is validated before decoding, but the NBIS decoder is not hardened
-  against deliberately corrupted image data. Do not decode untrusted files in a process that
-  must not crash.
+- Damaged or truncated WSQ data is rejected with a `WsqException`. The decoder is fuzzed with
+  corrupted files under AddressSanitizer (see [`nbis/fuzz`](nbis/fuzz)), but a file can still
+  claim a very large image: decoding allocates memory in proportion to the width and height in
+  its header before the data is checked, up to the limit of about 536 million pixels.
+- Only the standard WSQ wavelet filter pair is supported (filter lengths 9 and 7, the pair NBIS
+  itself writes). Files with other filters are rejected with a `WsqException`.
 
 ## Projects in the solution
 

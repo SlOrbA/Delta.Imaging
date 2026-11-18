@@ -1,0 +1,308 @@
+diff --git a/imgtools/src/lib/jpegl/huff.c b/imgtools/src/lib/jpegl/huff.c
+index a86618d..332a2f2 100644
+--- a/imgtools/src/lib/jpegl/huff.c
++++ b/imgtools/src/lib/jpegl/huff.c
+@@ -699,7 +699,9 @@ int build_huffsizes(HUFFCODE **ohuffcode_table, int *temp_size,
+    int code_size;               /*code sizes*/
+    int number_of_codes = 1;     /*the number codes for a given code size*/
+ 
+-   huffcode_table = (HUFFCODE *)calloc(max_huffcounts+1, sizeof(HUFFCODE));
++   /* One entry more than the largest table (max_huffcounts+1 codes): */
++   /* the list is terminated by an entry of size 0.                   */
++   huffcode_table = (HUFFCODE *)calloc(max_huffcounts+2, sizeof(HUFFCODE));
+    if(huffcode_table == (HUFFCODE *)NULL){
+       fprintf(stderr, "ERROR : build_huffsizes : calloc : huffcode_table\n");
+       return(-2);
+@@ -709,6 +711,11 @@ int build_huffsizes(HUFFCODE **ohuffcode_table, int *temp_size,
+ 
+    for(code_size = 1; code_size <= MAX_HUFFBITS; code_size++) {
+       while(number_of_codes <= huffbits[code_size - 1]) {
++         if(*temp_size > max_huffcounts){
++            fprintf(stderr, "ERROR : build_huffsizes : too many huffman codes\n");
++            free(huffcode_table);
++            return(-3);
++         }
+ 	 (huffcode_table + *temp_size)->size = code_size;
+ 	 (*temp_size)++;
+ 	 number_of_codes++;
+diff --git a/imgtools/src/lib/wsq/decoder.c b/imgtools/src/lib/wsq/decoder.c
+index 17acbbf..4363aff 100644
+--- a/imgtools/src/lib/wsq/decoder.c
++++ b/imgtools/src/lib/wsq/decoder.c
+@@ -143,6 +143,15 @@ int wsq_decode_mem(unsigned char **odata, int *ow, int *oh, int *od, int *oppi,
+    }
+    width = frm_header_wsq.width;
+    height = frm_header_wsq.height;
++   /* The pixel count is computed and used as an int throughout: the */
++   /* two 16-bit dimensions can exceed it.                           */
++   if(width <= 0 || height <= 0 ||
++      (long long)width * height > 0x7FFFFFFFLL / (long long)sizeof(float)) {
++      fprintf(stderr, "ERROR : wsq_decode_mem : ");
++      fprintf(stderr, "unsupported image size %d x %d\n", width, height);
++      free_wsq_decoder_resources();
++      return(-19);
++   }
+    num_pix = width * height;
+ 
+    if((ret = getc_ppi_wsq(&ppi, idata, ilen))){
+@@ -160,7 +169,9 @@ int wsq_decode_mem(unsigned char **odata, int *ow, int *oh, int *od, int *oppi,
+       fprintf(stderr, "Tables for wavelet decomposition finished\n\n");
+ 
+    /* Allocate working memory. */
+-   qdata = (short *) malloc(num_pix * sizeof(short));
++   /* Zero initialized: a damaged stream can end before every        */
++   /* coefficient has been decoded.                                  */
++   qdata = (short *) calloc(num_pix, sizeof(short));
+    if(qdata == (short *)NULL) {
+       fprintf(stderr,"ERROR: wsq_decode_mem : malloc : qdata1\n");
+       free_wsq_decoder_resources();
+@@ -432,6 +443,12 @@ int huffman_decode_data_mem(
+          if((ret = getc_block_header(&hufftable_id, cbufptr, ebufptr)))
+             return(ret);
+ 
++         if(hufftable_id >= MAX_DHT_TABLES) {
++            fprintf(stderr, "ERROR : huffman_decode_data_mem : ");
++            fprintf(stderr, "huffman table {%d} out of range.\n", hufftable_id);
++            return(-51);
++         }
++
+          if((dht_table+hufftable_id)->tabdef != 1) {
+             fprintf(stderr, "ERROR : huffman_decode_data_mem : ");
+             fprintf(stderr, "huffman table {%d} undefined.\n", hufftable_id);
+@@ -474,7 +491,7 @@ int huffman_decode_data_mem(
+          continue;
+       }
+ 
+-      if(ipc > ipc_mx) {
++      if(ipc >= ipc_mx) {
+          fprintf(stderr, "ERROR : huffman_decode_data_mem [1]: ");
+          fprintf(stderr, "Decoded data extends past image buffer. ");
+          fprintf(stderr, "Encoded data appears corrupt or non-standard.\n");
+@@ -736,6 +753,11 @@ int decode_data_mem(
+    }
+ 
+    for(inx = 1; (int)code > maxcode[inx]; inx++) {
++      /* No code is longer than MAX_HUFFBITS: the tables end there. */
++      if(inx >= MAX_HUFFBITS) {
++         fprintf(stderr, "ERROR : decode_data_mem : invalid huffman code\n");
++         return(-53);
++      }
+       if((ret = getc_nextbits_wsq(&tbits, marker, cbufptr, ebufptr, bit_count, 1)))
+          return(ret);
+ 
+@@ -747,6 +769,10 @@ int decode_data_mem(
+    }
+    inx2 = valptr[inx];
+    inx2 = inx2 + code - mincode[inx];
++   if(inx2 < 0 || inx2 > MAX_HUFFCOUNTS_WSQ) {
++      fprintf(stderr, "ERROR : decode_data_mem : invalid huffman code\n");
++      return(-53);
++   }
+ 
+    *onodeptr = huffvalues[inx2];
+    return(0);
+@@ -884,7 +910,7 @@ int getc_nextbits_wsq(
+          if((ret = getc_byte(&code2, cbufptr, ebufptr))){
+             return(ret);
+          }
+-         if(code2 != 0x00 && bits_req == 1) {
++         if(code2 != 0x00 && bits_req == 1 && marker != (unsigned short *)NULL) {
+             *marker = (code << 8) | code2;
+             *obits = 1;
+             return(0);
+diff --git a/imgtools/src/lib/wsq/tableio.c b/imgtools/src/lib/wsq/tableio.c
+index 174a625..d842fde 100644
+--- a/imgtools/src/lib/wsq/tableio.c
++++ b/imgtools/src/lib/wsq/tableio.c
+@@ -526,6 +526,22 @@ int read_transform_table(
+    return(0);
+ }
+ 
++/* Filter lengths as stored in a transform table segment. */
++#define WSQ_DTT_HISZ 9
++#define WSQ_DTT_LOSZ 7
++
++/*******************************************************************/
++/* Frees the filters of a transform table and clears the pointers, */
++/* so that free_wsq_decoder_resources() does not free them again.  */
++/*******************************************************************/
++static void free_dtt_filters(DTT_TABLE *dtt_table)
++{
++   free(dtt_table->lofilt);
++   dtt_table->lofilt = (float *)NULL;
++   free(dtt_table->hifilt);
++   dtt_table->hifilt = (float *)NULL;
++}
++
+ /*********************************************************************/
+ /* Routine to read in transform table parameters from memory buffer. */
+ /*********************************************************************/
+@@ -557,6 +573,18 @@ int getc_transform_table(
+       fprintf(stderr, "hisize = %d\n", dtt_table->hisz);
+    }
+ 
++   /* Only the filter lengths of the WSQ standard filter pair are    */
++   /* accepted (the ones this library writes). The reconstruction in */
++   /* join_lets() indexes the filters and the subbands with offsets  */
++   /* derived from these lengths without checking them: other        */
++   /* lengths, including zero, read and write outside the buffers.   */
++   if(dtt_table->hisz != WSQ_DTT_HISZ || dtt_table->losz != WSQ_DTT_LOSZ) {
++      fprintf(stderr, "ERROR : getc_transform_table : ");
++      fprintf(stderr, "unsupported filter lengths %d, %d\n",
++              dtt_table->hisz, dtt_table->losz);
++      return(-98);
++   }
++
+    /* Added 02-24-05 by MDG */
+    /* If lofilt member previously allocated ... */
+    if(dtt_table->lofilt != (float *)NULL){
+@@ -582,7 +610,7 @@ int getc_transform_table(
+ 
+    dtt_table->hifilt = (float *)calloc(dtt_table->hisz,sizeof(float));
+    if(dtt_table->hifilt == (float *)NULL) {
+-      free(dtt_table->lofilt);
++      free_dtt_filters(dtt_table);
+       fprintf(stderr,
+       "ERROR : getc_transform_table : calloc : hifilt\n");
+       return(-95);
+@@ -595,8 +623,7 @@ int getc_transform_table(
+ 
+    a_lofilt = (float *) calloc(a_size, sizeof(float));
+    if(a_lofilt == (float *)NULL) {
+-      free(dtt_table->lofilt);
+-      free(dtt_table->hifilt);
++      free_dtt_filters(dtt_table);
+       fprintf(stderr,
+       "ERROR : getc_transform_table : calloc : a_lofilt\n");
+       return(-96);
+@@ -605,20 +632,17 @@ int getc_transform_table(
+    a_size--;
+    for(cnt = 0; cnt <= a_size; cnt++) {
+       if((ret = getc_byte(&sign, cbufptr, ebufptr))){
+-         free(dtt_table->lofilt);
+-         free(dtt_table->hifilt);
++         free_dtt_filters(dtt_table);
+          free(a_lofilt);
+          return(ret);
+       }
+       if((ret = getc_byte(&scale, cbufptr, ebufptr))){
+-         free(dtt_table->lofilt);
+-         free(dtt_table->hifilt);
++         free_dtt_filters(dtt_table);
+          free(a_lofilt);
+          return(ret);
+       }
+       if((ret = getc_uint(&shrt_dat, cbufptr, ebufptr))){
+-         free(dtt_table->lofilt);
+-         free(dtt_table->hifilt);
++         free_dtt_filters(dtt_table);
+          free(a_lofilt);
+          return(ret);
+       }
+@@ -656,8 +680,7 @@ int getc_transform_table(
+ 
+    a_hifilt = (float *) calloc(a_size, sizeof(float));
+    if(a_hifilt == (float *)NULL) {
+-      free(dtt_table->lofilt);
+-      free(dtt_table->hifilt);
++      free_dtt_filters(dtt_table);
+       fprintf(stderr,
+       "ERROR : getc_transform_table : calloc : a_hifilt\n");
+       return(-97);
+@@ -666,20 +689,17 @@ int getc_transform_table(
+    a_size--;
+    for(cnt = 0; cnt <= a_size; cnt++) {
+       if((ret = getc_byte(&sign, cbufptr, ebufptr))){
+-         free(dtt_table->lofilt);
+-         free(dtt_table->hifilt);
++         free_dtt_filters(dtt_table);
+          free(a_hifilt);
+          return(ret);
+       }
+       if((ret = getc_byte(&scale, cbufptr, ebufptr))){
+-         free(dtt_table->lofilt);
+-         free(dtt_table->hifilt);
++         free_dtt_filters(dtt_table);
+          free(a_hifilt);
+          return(ret);
+       }
+       if((ret = getc_uint(&shrt_dat, cbufptr, ebufptr))){
+-         free(dtt_table->lofilt);
+-         free(dtt_table->hifilt);
++         free_dtt_filters(dtt_table);
+          free(a_hifilt);
+          return(ret);
+       }
+@@ -1366,6 +1386,14 @@ int getc_huffman_table_wsq(
+                                READ_TABLE_LEN, &bytes_left)))
+       return(ret);
+ 
++   if(table_id >= MAX_DHT_TABLES){
++      free(huffbits);
++      free(huffvalues);
++      fprintf(stderr, "ERROR : getc_huffman_table_wsq : ");
++      fprintf(stderr, "huffman table ID = %d out of range\n", table_id);
++      return(-2);
++   }
++
+    /* Store table into global structure list. */
+    memcpy((dht_table+table_id)->huffbits, huffbits, MAX_HUFFBITS);
+    memcpy((dht_table+table_id)->huffvalues, huffvalues,
+@@ -1381,6 +1409,14 @@ int getc_huffman_table_wsq(
+                                   NO_READ_TABLE_LEN, &bytes_left)))
+          return(ret);
+ 
++      if(table_id >= MAX_DHT_TABLES){
++         free(huffbits);
++         free(huffvalues);
++         fprintf(stderr, "ERROR : getc_huffman_table_wsq : ");
++         fprintf(stderr, "huffman table ID = %d out of range\n", table_id);
++         return(-2);
++      }
++
+       /* If table is already defined ... */
+       if((dht_table+table_id)->tabdef){
+          free(huffbits);
+diff --git a/imgtools/src/lib/wsq/util.c b/imgtools/src/lib/wsq/util.c
+index 6228bab..633c2fd 100644
+--- a/imgtools/src/lib/wsq/util.c
++++ b/imgtools/src/lib/wsq/util.c
+@@ -600,9 +600,30 @@ int unquantize(
+    if(dqt_table->dqt_def != 1) {
+       fprintf(stderr,
+       "ERROR: unquantize : quantization table parameters not defined!\n");
++      free(fip);
+       return(-92);
+    }
+ 
++   /* The subbands must lie inside the image and together need no more */
++   /* coefficients than the image has pixels (the size of sip). Q_TREE */
++   /* stores its geometry in shorts, which overflow for large images.  */
++   row = 0;
++   for(cnt = 0; cnt < NUM_SUBBANDS; cnt++) {
++      if(dqt_table->q_bin[cnt] == 0.0)
++         continue;
++      if(q_tree[cnt].x < 0 || q_tree[cnt].y < 0 ||
++         q_tree[cnt].lenx < 0 || q_tree[cnt].leny < 0 ||
++         q_tree[cnt].x + q_tree[cnt].lenx > width ||
++         q_tree[cnt].y + q_tree[cnt].leny > height ||
++         (long long)q_tree[cnt].lenx * q_tree[cnt].leny >
++            (long long)width * height - row) {
++         fprintf(stderr, "ERROR : unquantize : invalid subband geometry\n");
++         free(fip);
++         return(-93);
++      }
++      row += q_tree[cnt].lenx * q_tree[cnt].leny;
++   }
++
+    sptr = sip;
+    C = dqt_table->bin_center;
+    for(cnt = 0; cnt < NUM_SUBBANDS; cnt++) {
+@@ -625,6 +646,7 @@ int unquantize(
+             else {
+                fprintf(stderr,
+                "ERROR : unquantize : invalid quantization pixel value\n");
++               free(fip);
+                return(-93);
+             }
+             fptr++;

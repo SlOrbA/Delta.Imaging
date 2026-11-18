@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The NBIS WSQ decoder no longer crashes the process on corrupted image data. The static libraries are now built from patched NBIS sources (`Delta.Wsq/nbis/patches`): Huffman table ids, Huffman codes and the number of decoded coefficients are bounds-checked, tables that appear in the middle of the compressed data are validated like those in the header, an invalid transform table no longer leads to a double free, a Huffman table of the largest size no longer overflows its code list, and frame dimensions the decoder cannot represent are rejected. Such files now fail with `WsqException` (#32)
+- The decoder only accepts transform tables with the filter lengths of the standard WSQ filter pair (9 and 7). The NBIS reconstruction reads outside its buffers for other lengths. Files using another filter, which NBIS may have decoded before, are now rejected with `WsqException` (#32)
+- Images of more than about 536 million pixels are rejected instead of overflowing the 32-bit pixel count (#32)
+
+### Added
+- A fuzzer for the nbis wrapper and the NBIS decoder (`Delta.Wsq/nbis/fuzz`), run in CI with AddressSanitizer on every change to the wrapper or the patches and weekly (#32)
+- The NBIS source revision the libraries are built from is pinned in `Delta.Wsq/nbis/nbis-source.env` (#32)
+
 ### Changed
 - **Breaking:** `WsqCodec.Encode`, `Decode` and `GetComments` (and `WsqEncoder` / `WsqDecoder`, which call them) throw the new `WsqException` when the native codec fails, instead of returning an empty array or an empty image. `WsqException.ErrorCode` carries the error code of the nbis DLL. Null or empty input to the `WsqCodec` methods still gives an empty result and is not an error; `WsqDecoder` keeps throwing `ArgumentNullException` for it (#22)
 - **Breaking:** `WsqDecoder.DecodeGdi` / `DecodeWpf` throw `WsqException` for data that cannot be decoded; they threw `ArgumentException` ("The image is empty") before (#22)

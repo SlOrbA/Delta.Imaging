@@ -170,6 +170,139 @@ namespace Delta.Wsq.Tests
             AssertSampleStillDecodes();
         }
 
+        // ── Damage that only shows while decoding (#32) ──────────────────────
+        // Found by the fuzzer in Delta.Wsq/nbis/fuzz: each of these made the
+        // unpatched NBIS decoder access memory outside its buffers.
+
+        // Decodes damaged data: it may decode (to a wrong image) or be
+        // rejected, but must not take the process down.
+        private static void DecodeDamaged(byte[] wsq)
+        {
+            try
+            {
+                var image = WsqCodec.Decode(wsq);
+                Assert.Equal(image.Width * image.Height, image.Data.Length);
+            }
+            catch (WsqException exception)
+            {
+                Assert.NotEqual(0, exception.ErrorCode);
+            }
+        }
+
+        [Theory]
+        [InlineData(6)]     // high byte of the height
+        [InlineData(8)]     // high byte of the width
+        public void Decode_FrameDimensionsFarBeyondTheData_Throws(int offsetInFrameHeader)
+        {
+            var wsq = LoadSample("fp.wsq");
+            wsq[FindSegment(wsq, SofMarker) + offsetInFrameHeader] = 0xFF;
+
+            Assert.Throws<WsqException>(() => WsqCodec.Decode(wsq));
+            AssertSampleStillDecodes();
+        }
+
+        // A well-formed transform table (segment length matching the filter
+        // lengths) passes the structural validation, but the reconstruction
+        // only works for the filter lengths of the standard WSQ filter pair.
+        [Theory]
+        [InlineData(7, 1)]
+        [InlineData(1, 7)]
+        [InlineData(8, 8)]
+        [InlineData(9, 9)]
+        [InlineData(7, 9)]
+        [InlineData(255, 255)]
+        public void Decode_TransformTableWithOtherFilterLengths_Throws(int hisz, int losz)
+        {
+            var original = LoadSample("fp.wsq");
+            var start = FindSegment(original, DttMarker);
+            var end = start + 2 + ((original[start + 2] << 8) | original[start + 3]);
+
+            var coefficients = (hisz + 1) / 2 + (losz + 1) / 2;
+            var length = 4 + 6 * coefficients;
+            var table = new byte[2 + length];
+            table[0] = DttMarker >> 8;
+            table[1] = DttMarker & 0xFF;
+            table[2] = (byte)(length >> 8);
+            table[3] = (byte)length;
+            table[4] = (byte)hisz;
+            table[5] = (byte)losz;
+
+            var wsq = original.Take(start).Concat(table).Concat(original.Skip(end)).ToArray();
+
+            Assert.Throws<WsqException>(() => WsqCodec.Decode(wsq));
+            AssertSampleStillDecodes();
+        }
+
+        // The largest Huffman table NBIS accepts has 257 values; building its
+        // code list wrote one entry past the allocated buffer.
+        [Theory]
+        [InlineData(8, 2, 16, 255)]     // 257 values
+        [InlineData(15, 2, 16, 255)]    // 257 values
+        [InlineData(8, 1, 16, 255)]     // 256 values
+        public void Decode_LargestHuffmanTable_DoesNotCrash(int length1, int count1, int length2, int count2)
+        {
+            var original = LoadSample("fp.wsq");
+            var start = FindSegment(original, DhtMarker);
+            var end = start + 2 + ((original[start + 2] << 8) | original[start + 3]);
+
+            var values = count1 + count2;
+            var length = 2 + 1 + 16 + values;
+            var table = new byte[2 + length];
+            table[0] = DhtMarker >> 8;
+            table[1] = DhtMarker & 0xFF;
+            table[2] = (byte)(length >> 8);
+            table[3] = (byte)length;
+            table[4] = original[start + 4];             // same table id
+            table[4 + length1] = (byte)count1;          // number of codes of each length
+            table[4 + length2] = (byte)count2;
+            for (var i = 0; i < values; i++)
+                table[21 + i] = (byte)i;
+
+            DecodeDamaged(original.Take(start).Concat(table).Concat(original.Skip(end)).ToArray());
+            AssertSampleStillDecodes();
+        }
+
+        [Theory]
+        [InlineData(SobMarker)]     // block header: the next byte becomes a Huffman table id
+        [InlineData(DttMarker)]     // transform table read from compressed data
+        [InlineData(DqtMarker)]
+        [InlineData(DhtMarker)]
+        public void Decode_MarkerInsideTheCompressedData_DoesNotCrash(int marker)
+        {
+            var original = LoadSample("fp.wsq");
+            var dataStart = FindSegment(original, SobMarker) + 5;
+
+            for (var offset = dataStart; offset < original.Length - 1; offset += 97)
+            {
+                var wsq = (byte[])original.Clone();
+                wsq[offset] = (byte)(marker >> 8);
+                wsq[offset + 1] = (byte)marker;
+                DecodeDamaged(wsq);
+            }
+
+            AssertSampleStillDecodes();
+        }
+
+        [Fact]
+        public void Decode_DamagedCompressedData_DoesNotCrash()
+        {
+            var original = LoadSample("fp.wsq");
+            var dataStart = FindSegment(original, SobMarker) + 5;
+            var random = new Random(32);
+
+            for (var i = 0; i < 300; i++)
+            {
+                var wsq = (byte[])original.Clone();
+                var offset = random.Next(dataStart, wsq.Length);
+                var length = random.Next(1, 16);
+                for (var k = offset; k < offset + length && k < wsq.Length; k++)
+                    wsq[k] = (byte)random.Next(256);
+                DecodeDamaged(wsq);
+            }
+
+            AssertSampleStillDecodes();
+        }
+
         [Fact]
         public void GetComments_TruncatedAnywhereInTheHeaders_Throws()
         {

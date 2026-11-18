@@ -7,13 +7,18 @@ name: Build nbis DLL
 #           Delta.Wsq/nbis/lib32 and lib64. Fast (no MSYS2). Used by ci.yml
 #           and release.yml, so CI tests exactly what developers build locally.
 #   source    – first rebuild the NBIS static libraries from source with MSYS2 +
-#           MinGW-w64 (see Delta.Wsq/nbis/BUILDING.md). Verifies the source
-#           build still works on current runner images; the resulting
-#           `nbis-static-libs` artifact can be used to refresh the committed
-#           libraries.
+#           MinGW-w64 (see Delta.Wsq/nbis/BUILDING.md): the NBIS commit named
+#           in Delta.Wsq/nbis/nbis-source.env with Delta.Wsq/nbis/patches
+#           applied. Verifies the source build still works on current runner
+#           images; the resulting `nbis-static-libs` artifact is used to
+#           refresh the committed libraries.
 #
-# The source build runs on PRs that change this workflow, weekly (to catch
-# runner / MSYS2 drift early) and on demand.
+# The source build also fuzzes the decoder (job `fuzz`): the same sources,
+# built for Linux with AddressSanitizer.
+#
+# The source build runs on PRs that change this workflow, the patches, the
+# wrapper or the fuzzer, weekly (to catch runner / MSYS2 drift early) and on
+# demand.
 on:
   workflow_call:
     inputs:
@@ -35,6 +40,11 @@ on:
   pull_request:
     paths:
       - .github/workflows/build-nbis-dll.yml
+      - Delta.Wsq/nbis/nbis-source.env
+      - Delta.Wsq/nbis/patches/**
+      - Delta.Wsq/nbis/fuzz/**
+      - Delta.Wsq/nbis/nistwsq.cpp
+      - Delta.Wsq/nbis/nistwsq.h
   schedule:
     - cron: "0 5 * * 1"   # Mondays 05:00 UTC
 
@@ -84,11 +94,35 @@ jobs:
       # Always a fresh clone: the source build must start from clean sources.
       # We clone with the runner's pre-installed git (PowerShell) to avoid
       # PATH issues inside the MSYS2 login shell.
-      - name: Clone NBIS source
+      # The commit is pinned in nbis-source.env; the patches harden the WSQ
+      # decoder against corrupted input (see Delta.Wsq/nbis/BUILDING.md).
+      - name: Clone and patch NBIS source
         if: env.FROM_SOURCE == 'true'
         shell: pwsh
         run: |
-          git clone --depth 1 https://github.com/lessandro/nbis C:\nbis-src-32
+          $source = @{}
+          foreach ($line in Get-Content Delta.Wsq\nbis\nbis-source.env) {
+            if ($line -match '^([A-Z_]+)=(.+)$') { $source[$Matches[1]] = $Matches[2].Trim() }
+          }
+          Write-Host "NBIS $($source.NBIS_REPOSITORY) @ $($source.NBIS_COMMIT)"
+
+          # autocrlf off: the patches expect the LF line endings of the repository.
+          git clone --config core.autocrlf=false $source.NBIS_REPOSITORY C:\nbis-src-32
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C C:\nbis-src-32 checkout --quiet $source.NBIS_COMMIT
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $patches = @(Get-ChildItem Delta.Wsq\nbis\patches\*.patch | Sort-Object Name)
+          if ($patches.Count -eq 0) {
+            Write-Host "::error::no patches found in Delta.Wsq/nbis/patches"
+            exit 1
+          }
+          foreach ($patch in $patches) {
+            Write-Host "Applying $($patch.Name)"
+            git -C C:\nbis-src-32 apply --whitespace=nowarn $patch.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
           Copy-Item -Recurse -Force C:\nbis-src-32 C:\nbis-src-64
 
       # ── Build 32-bit static libraries ─────────────────────────────────────
@@ -143,6 +177,23 @@ jobs:
 
           Copy-Item C:\NBISBuild32\lib\*.a Delta.Wsq\nbis\lib32\ -Force
           Copy-Item C:\NBISBuild64\lib\*.a Delta.Wsq\nbis\lib64\ -Force
+
+          # Record what the libraries were built from. ci.yml compares this
+          # with nbis-source.env and patches/, so the committed libraries
+          # cannot fall behind them. Same format as the lint step computes:
+          # SHA-256 over the patch files in name order.
+          $commit = (git -C C:\nbis-src-32 rev-parse HEAD).Trim()
+          $bytes = [System.Collections.Generic.List[byte]]::new()
+          foreach ($patch in Get-ChildItem Delta.Wsq\nbis\patches\*.patch | Sort-Object Name) {
+            $bytes.AddRange([System.IO.File]::ReadAllBytes($patch.FullName))
+          }
+          $hash = [System.BitConverter]::ToString(
+            [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes.ToArray())).Replace('-', '').ToLowerInvariant()
+          $stamp = "NBIS_COMMIT=$commit`nPATCHES_SHA256=$hash`n"
+          foreach ($dir in 'lib32', 'lib64') {
+            [System.IO.File]::WriteAllText("$PWD\Delta.Wsq\nbis\$dir\SOURCE", $stamp)
+          }
+          Write-Host $stamp
 
       # ── Build the DLL with MSVC ────────────────────────────────────────────
       - name: Add MSBuild to PATH
@@ -222,5 +273,34 @@ jobs:
           name: nbis-static-libs
           path: |
             Delta.Wsq/nbis/lib32/*.a
+            Delta.Wsq/nbis/lib32/SOURCE
             Delta.Wsq/nbis/lib64/*.a
+            Delta.Wsq/nbis/lib64/SOURCE
+          retention-days: 30
+
+  # ── Fuzz the decoder ───────────────────────────────────────────────────────
+  # The wrapper and the patched NBIS sources, built for Linux with
+  # AddressSanitizer, decode tens of thousands of mutations of the sample
+  # files. Any memory error, hang or lasting damage to the decoder fails the
+  # job. Not run when ci.yml / release.yml only need the DLLs.
+  fuzz:
+    name: Fuzz the WSQ decoder (AddressSanitizer)
+    if: inputs.libs != 'committed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Build with AddressSanitizer and fuzz
+        run: Delta.Wsq/nbis/fuzz/run.sh "$RUNNER_TEMP/fuzz"
+
+      - name: Upload AddressSanitizer log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-asan-log
+          path: ${{ runner.temp }}/fuzz/asan.log
           retention-days: 30

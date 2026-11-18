@@ -60,6 +60,19 @@ jobs:
               status=1
             fi
           done < <(grep -oE 'lib(32|64).lib[a-z0-9]+[.]a' nbis.vcxproj | sort -u)
+
+          # The libraries must be built from the pinned NBIS commit with the
+          # current patches: the source build records both in lib*/SOURCE.
+          # shellcheck source=/dev/null
+          . ./nbis-source.env
+          expected="NBIS_COMMIT=$NBIS_COMMIT
+          PATCHES_SHA256=$(cat patches/*.patch | sha256sum | cut -d' ' -f1)"
+          for dir in lib32 lib64; do
+            if [ "$(cat "$dir/SOURCE" 2>/dev/null)" != "$expected" ]; then
+              echo "::error file=Delta.Wsq/nbis/$dir/SOURCE::the static libraries were not built from the current NBIS commit and patches; refresh them from the nbis-static-libs artifact of build-nbis-dll.yml (see BUILDING.md)"
+              status=1
+            fi
+          done
           exit $status
 
   # ── Stage 2: native DLL ────────────────────────────────────────────────────
