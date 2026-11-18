@@ -51,10 +51,13 @@ compression ratio or a quality percentage.
 
 - 8 bits per pixel grayscale only; images must be at least 33 x 33 pixels
   (`WsqCodec.Constants.MinImageSize`).
-- `WsqCodec.Decode` and `WsqCodec.GetComments` return an empty result (`RawImageData.IsEmpty`,
-  an empty array) for data they cannot read; they do not throw. `WsqDecoder` throws instead:
-  `ArgumentNullException` for null or empty input, and `DecodeGdi` / `DecodeWpf` throw
-  `ArgumentException` when the data cannot be decoded.
+- Encoding, decoding and reading comments throw `WsqException` when the native codec fails,
+  for example for truncated or damaged WSQ data. `WsqException.ErrorCode` holds the reason:
+  one of the constants of `WsqException` (`MalformedStream`, `ImageTooSmall`, ...) or the
+  error code of the NBIS function that failed.
+- Null or empty input is not an error for `WsqCodec`: `Decode` returns an empty image
+  (`RawImageData.IsEmpty`), `Encode` and `GetComments` an empty array. `WsqDecoder` throws
+  `ArgumentNullException` for it.
 - Calls into the native codec are serialized: the API is safe to use from several threads, but
   encoding and decoding run one at a time per process.
 - The header of a WSQ file is validated before decoding, but the NBIS decoder is not hardened

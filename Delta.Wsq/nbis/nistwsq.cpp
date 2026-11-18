@@ -39,8 +39,11 @@
 // It does not make decoding of arbitrary corrupted data safe.
 int wsq_validate_stream(const unsigned char* data, int length, bool for_decode)
 {
-	if (data == nullptr || length < 4)
+	if (data == nullptr || length <= 0)
 		return WSQ_ERR_INVALID_ARGUMENT;
+	// Too short for SOI and a marker with its length: truncated data, not a bad call.
+	if (length < 4)
+		return WSQ_ERR_MALFORMED_STREAM;
 	if (((data[0] << 8) | data[1]) != SOI_WSQ)
 		return WSQ_ERR_MALFORMED_STREAM;
 

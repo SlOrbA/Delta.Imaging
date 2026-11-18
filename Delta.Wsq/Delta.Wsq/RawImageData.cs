@@ -3,14 +3,24 @@ namespace Delta.Wsq
 {
     public class RawImageData
     {
-        public static readonly RawImageData Empty = new RawImageData()
+        /// <summary>
+        /// Gets a new empty image. Every call returns its own instance, so changing
+        /// one does not affect the others.
+        /// </summary>
+        public static RawImageData Empty
         {
-            Data = new byte[0],
-            Width = 0,
-            Height = 0,
-            PixelDepth = 0,
-            Resolution = 0
-        };
+            get
+            {
+                return new RawImageData()
+                {
+                    Data = new byte[0],
+                    Width = 0,
+                    Height = 0,
+                    PixelDepth = 0,
+                    Resolution = 0
+                };
+            }
+        }
 
         public byte[] Data { get; set; }
         public int Width { get; set; }

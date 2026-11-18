@@ -52,6 +52,18 @@ namespace Delta.Wsq.Tests
         }
 
         [Fact]
+        public void RawImageData_Empty_IsANewInstanceEachTime()
+        {
+            var first = RawImageData.Empty;
+            first.Width = 123;
+            first.Data = new byte[] { 1 };
+
+            Assert.NotSame(first, RawImageData.Empty);
+            Assert.True(RawImageData.Empty.IsEmpty);
+            Assert.Equal(0, RawImageData.Empty.Width);
+        }
+
+        [Fact]
         public void Decode_EmptyInput_ReturnsEmpty()
         {
             var result = WsqCodec.Decode(Array.Empty<byte>());
@@ -187,15 +199,30 @@ namespace Delta.Wsq.Tests
         }
 
         [Fact]
-        public void Decode_CorruptedWsqHeader_ReturnsEmpty()
+        public void Encode_OutputLargerThanTheImage_ThrowsWithNbisErrorCode()
+        {
+            // NBIS gives the encoder an output buffer of width * height bytes
+            // and fails when the stream does not fit: here the comment alone
+            // is longer than the image.
+            var raw = MakeSyntheticImage(64, 64);
+            var comment = new string('c', 64 * 64 + 1000);
+
+            var exception = Assert.Throws<WsqException>(() => WsqCodec.Encode(raw, 0.75f, comment));
+
+            Assert.Equal(-32, exception.ErrorCode); // NBIS putc_byte: output buffer full
+            Assert.StartsWith("WSQ encoding failed", exception.Message);
+            Assert.NotEmpty(WsqCodec.Encode(raw, 0.75f, "short")); // the encoder still works
+        }
+
+        [Fact]
+        public void Decode_CorruptedWsqHeader_Throws()
         {
             // Create fake WSQ with bad header
             var corrupted = new byte[] { SoiByte0, SoiByte1, 0xFF, 0xFF, 0x00 };
 
-            var result = WsqCodec.Decode(corrupted);
+            var exception = Assert.Throws<WsqException>(() => WsqCodec.Decode(corrupted));
 
-            // Should return empty instead of crashing
-            Assert.True(result.IsEmpty);
+            Assert.Equal(WsqException.MalformedStream, exception.ErrorCode);
         }
 
         [Fact]

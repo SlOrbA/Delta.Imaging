@@ -68,9 +68,9 @@ namespace Delta.Wsq.Tests
         {
             var garbage = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
 
-            Assert.True(new WsqDecoder().Decode(garbage).IsEmpty);
-            Assert.Throws<ArgumentException>(() => new WsqDecoder().DecodeGdi(garbage));
-            Assert.Throws<ArgumentException>(() => new WsqDecoder().DecodeWpf(garbage));
+            Assert.Throws<WsqException>(() => new WsqDecoder().Decode(garbage));
+            Assert.Throws<WsqException>(() => new WsqDecoder().DecodeGdi(garbage));
+            Assert.Throws<WsqException>(() => new WsqDecoder().DecodeWpf(garbage));
         }
 
         [Fact]
