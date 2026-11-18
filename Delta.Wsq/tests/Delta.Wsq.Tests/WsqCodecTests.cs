@@ -52,6 +52,18 @@ namespace Delta.Wsq.Tests
         }
 
         [Fact]
+        public void RawImageData_Empty_IsANewInstanceEachTime()
+        {
+            var first = RawImageData.Empty;
+            first.Width = 123;
+            first.Data = new byte[] { 1 };
+
+            Assert.NotSame(first, RawImageData.Empty);
+            Assert.True(RawImageData.Empty.IsEmpty);
+            Assert.Equal(0, RawImageData.Empty.Width);
+        }
+
+        [Fact]
         public void Decode_EmptyInput_ReturnsEmpty()
         {
             var result = WsqCodec.Decode(Array.Empty<byte>());
@@ -187,15 +199,14 @@ namespace Delta.Wsq.Tests
         }
 
         [Fact]
-        public void Decode_CorruptedWsqHeader_ReturnsEmpty()
+        public void Decode_CorruptedWsqHeader_Throws()
         {
             // Create fake WSQ with bad header
             var corrupted = new byte[] { SoiByte0, SoiByte1, 0xFF, 0xFF, 0x00 };
 
-            var result = WsqCodec.Decode(corrupted);
+            var exception = Assert.Throws<WsqException>(() => WsqCodec.Decode(corrupted));
 
-            // Should return empty instead of crashing
-            Assert.True(result.IsEmpty);
+            Assert.Equal(WsqException.MalformedStream, exception.ErrorCode);
         }
 
         [Fact]

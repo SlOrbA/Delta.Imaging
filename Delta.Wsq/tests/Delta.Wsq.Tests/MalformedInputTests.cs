@@ -72,7 +72,15 @@ namespace Delta.Wsq.Tests
         }
 
         [Fact]
-        public void Decode_StreamOfTooSmallImage_ReturnsEmpty()
+        private static void AssertFails(int expectedErrorCode, Action action)
+        {
+            var exception = Assert.Throws<WsqException>(action);
+            Assert.Equal(expectedErrorCode, exception.ErrorCode);
+            Assert.Contains(expectedErrorCode.ToString(System.Globalization.CultureInfo.InvariantCulture), exception.Message);
+        }
+
+        [Fact]
+        public void Decode_StreamOfTooSmallImage_Throws()
         {
             // Rewrite the frame header of a valid file to claim a 16 x 16 image.
             var wsq = LoadSample("fp.wsq");
@@ -80,12 +88,12 @@ namespace Delta.Wsq.Tests
             wsq[frame + 2] = 0; wsq[frame + 3] = 16;            // height
             wsq[frame + 4] = 0; wsq[frame + 5] = 16;            // width
 
-            Assert.True(WsqCodec.Decode(wsq).IsEmpty);
+            AssertFails(WsqException.ImageTooSmall, () => WsqCodec.Decode(wsq));
             AssertSampleStillDecodes();
         }
 
         [Fact]
-        public void Decode_TruncatedAnywhereInTheHeaders_ReturnsEmpty()
+        public void Decode_TruncatedAnywhereInTheHeaders_Throws()
         {
             var wsq = LoadSample("fp.wsq");
             // Up to and including the header of the first block (marker,
@@ -93,43 +101,47 @@ namespace Delta.Wsq.Tests
             var headersEnd = FindSegment(wsq, SobMarker) + 5;
 
             for (var length = 1; length <= headersEnd; length++)
-                Assert.True(WsqCodec.Decode(wsq.Take(length).ToArray()).IsEmpty, $"truncated to {length} bytes");
+            {
+                var truncated = wsq.Take(length).ToArray();
+                var exception = Assert.Throws<WsqException>(() => WsqCodec.Decode(truncated));
+                Assert.True(exception.ErrorCode != 0, $"truncated to {length} bytes");
+            }
 
             AssertSampleStillDecodes();
         }
 
         [Fact]
-        public void Decode_TransformTableWithZeroFilterLength_ReturnsEmpty()
+        public void Decode_TransformTableWithZeroFilterLength_Throws()
         {
             var wsq = LoadSample("fp.wsq");
             wsq[FindSegment(wsq, DttMarker) + 5] = 0; // low-pass filter length
 
-            Assert.True(WsqCodec.Decode(wsq).IsEmpty);
+            AssertFails(WsqException.MalformedStream, () => WsqCodec.Decode(wsq));
             AssertSampleStillDecodes();
         }
 
         [Fact]
-        public void Decode_HuffmanTableIdOutOfRange_ReturnsEmpty()
+        public void Decode_HuffmanTableIdOutOfRange_Throws()
         {
             var wsq = LoadSample("fp.wsq");
             wsq[FindSegment(wsq, DhtMarker) + 4] = 0xFF; // table id
 
-            Assert.True(WsqCodec.Decode(wsq).IsEmpty);
+            AssertFails(WsqException.MalformedStream, () => WsqCodec.Decode(wsq));
             AssertSampleStillDecodes();
         }
 
         [Fact]
-        public void Decode_BlockHuffmanTableIdOutOfRange_ReturnsEmpty()
+        public void Decode_BlockHuffmanTableIdOutOfRange_Throws()
         {
             var wsq = LoadSample("fp.wsq");
             wsq[FindSegment(wsq, SobMarker) + 4] = 0xFF; // table id of the first block
 
-            Assert.True(WsqCodec.Decode(wsq).IsEmpty);
+            AssertFails(WsqException.MalformedStream, () => WsqCodec.Decode(wsq));
             AssertSampleStillDecodes();
         }
 
         [Fact]
-        public void Decode_StreamWithoutQuantizationTable_ReturnsEmpty()
+        public void Decode_StreamWithoutQuantizationTable_Throws()
         {
             // NBIS would silently reuse the table of the previously decoded image.
             AssertSampleStillDecodes();
@@ -138,13 +150,13 @@ namespace Delta.Wsq.Tests
             var segmentLength = 2 + ((wsq[start + 2] << 8) | wsq[start + 3]);
             var withoutTable = wsq.Take(start).Concat(wsq.Skip(start + segmentLength)).ToArray();
 
-            Assert.True(WsqCodec.Decode(withoutTable).IsEmpty);
+            AssertFails(WsqException.MalformedStream, () => WsqCodec.Decode(withoutTable));
             Assert.Equal(2, WsqCodec.GetComments(withoutTable).Length); // comments are still readable
             AssertSampleStillDecodes();
         }
 
         [Fact]
-        public void GetComments_TruncatedAnywhereInTheHeaders_ReturnsNoComments()
+        public void GetComments_TruncatedAnywhereInTheHeaders_Throws()
         {
             var wsq = LoadSample("fp.wsq");
             var headersEnd = FindSegment(wsq, SobMarker);
@@ -152,7 +164,10 @@ namespace Delta.Wsq.Tests
             // Up to the last header byte the stream is incomplete, also when
             // the comments themselves (at the start of the file) are intact.
             for (var length = 1; length < headersEnd; length++)
-                Assert.Empty(WsqCodec.GetComments(wsq.Take(length).ToArray()));
+            {
+                var truncated = wsq.Take(length).ToArray();
+                AssertFails(WsqException.MalformedStream, () => WsqCodec.GetComments(truncated));
+            }
 
             AssertSampleStillDecodes();
         }
