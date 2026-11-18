@@ -78,6 +78,22 @@ namespace Delta.Wsq.Tests
             Assert.Contains(expectedErrorCode.ToString(System.Globalization.CultureInfo.InvariantCulture), exception.Message);
         }
 
+        [Theory]
+        [InlineData(WsqException.InvalidArgument, "invalid argument")]
+        [InlineData(WsqException.ImageTooSmall, "minimum WSQ image size")]
+        [InlineData(WsqException.MalformedStream, "truncated or damaged")]
+        [InlineData(WsqException.OutOfMemory, "out of memory")]
+        [InlineData(-57, "NBIS codec reported an error")]
+        public void WsqException_Message_NamesTheOperationReasonAndCode(int errorCode, string reason)
+        {
+            var exception = WsqException.For("decoding", errorCode);
+
+            Assert.Equal(errorCode, exception.ErrorCode);
+            Assert.StartsWith("WSQ decoding failed: ", exception.Message);
+            Assert.Contains(reason, exception.Message);
+            Assert.Contains(errorCode.ToString(System.Globalization.CultureInfo.InvariantCulture), exception.Message);
+        }
+
         [Fact]
         public void Decode_StreamOfTooSmallImage_Throws()
         {
