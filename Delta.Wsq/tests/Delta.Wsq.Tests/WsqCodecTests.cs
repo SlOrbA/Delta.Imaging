@@ -199,6 +199,22 @@ namespace Delta.Wsq.Tests
         }
 
         [Fact]
+        public void Encode_OutputLargerThanTheImage_ThrowsWithNbisErrorCode()
+        {
+            // NBIS gives the encoder an output buffer of width * height bytes
+            // and fails when the stream does not fit: here the comment alone
+            // is longer than the image.
+            var raw = MakeSyntheticImage(64, 64);
+            var comment = new string('c', 64 * 64 + 1000);
+
+            var exception = Assert.Throws<WsqException>(() => WsqCodec.Encode(raw, 0.75f, comment));
+
+            Assert.Equal(-32, exception.ErrorCode); // NBIS putc_byte: output buffer full
+            Assert.StartsWith("WSQ encoding failed", exception.Message);
+            Assert.NotEmpty(WsqCodec.Encode(raw, 0.75f, "short")); // the encoder still works
+        }
+
+        [Fact]
         public void Decode_CorruptedWsqHeader_Throws()
         {
             // Create fake WSQ with bad header
