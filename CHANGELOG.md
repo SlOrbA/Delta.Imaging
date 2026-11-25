@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-25
+
 ### Fixed
 - The NBIS WSQ decoder no longer crashes the process on corrupted image data. The static libraries are now built from patched NBIS sources (`Delta.Wsq/nbis/patches`): Huffman table ids, Huffman codes and the number of decoded coefficients are bounds-checked, tables that appear in the middle of the compressed data are validated like those in the header, an invalid transform table no longer leads to a double free, a Huffman table of the largest size no longer overflows its code list, and frame dimensions the decoder cannot represent are rejected. Such files now fail with `WsqException` (#32)
 - The decoder only accepts transform tables with the filter lengths of the standard WSQ filter pair (9 and 7). The NBIS reconstruction reads outside its buffers for other lengths. Files using another filter, which NBIS may have decoded before, are now rejected with `WsqException` (#32)
@@ -146,6 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Notable Changes |
 |---------|------|-----------------|
+| 2.0.0 | 2026-11-25 | **Breaking:** `WsqException` on codec failure; NBIS decoder hardened against corrupted data, fuzzed in CI |
 | 1.4.0 | 2026-11-18 | Input validation, thread safety, 32/64-bit P/Invoke fixes, versioned library zip |
 | 1.3.3 | 2026-11-16 | NBIS debug output disabled |
 | 1.3.2 | 2026-11-16 | Debug builds fixed, fail-early CI, release workflow |
@@ -173,11 +176,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Resolutions are rounded instead of truncated (499.9998 dpi becomes 500 ppi, not 499)
 - Calls into the nbis DLL run one at a time per process; code that encoded or decoded on several threads keeps working but no longer runs in parallel
 
-### From 1.4.x → next release
-- Replace `nbis32.dll` and `nbis64.dll` together with `Delta.Wsq.dll`. The library also loads the 1.4.x native DLLs, but those report data of 1–3 bytes as `WsqException.InvalidArgument` instead of `MalformedStream`
+### From 1.4.x → 2.0.0
+- Replace `nbis32.dll` and `nbis64.dll` together with `Delta.Wsq.dll`. The decoder hardening is in the native DLLs: `Delta.Wsq.dll` 2.0.0 also loads the 1.4.x native DLLs, but with them damaged files can still crash the process, and data of 1–3 bytes is reported as `WsqException.InvalidArgument` instead of `MalformedStream`
+- If you build the native DLLs yourself, build the NBIS static libraries from the pinned revision in `Delta.Wsq/nbis/nbis-source.env` with `Delta.Wsq/nbis/patches` applied (see `Delta.Wsq/nbis/BUILDING.md`). Libraries built from unpatched NBIS sources do not have the decoder fixes
 - A failed encode, decode or comment read throws `WsqException`. Code that checked for an empty result (`result.IsEmpty`, `result.Length == 0`) to detect undecodable data has to catch `WsqException` instead; `ErrorCode` tells why it failed. `WsqCodec.Encode` and `Decode` now return an empty result only for null or empty input. `WsqCodec.GetComments` also returns an empty array for a valid WSQ file that has no comments
 - Code that caught `ArgumentException` around `WsqDecoder.DecodeGdi` / `DecodeWpf` for undecodable data has to catch `WsqException`
-- Do not compare against `RawImageData.Empty` by reference; use `IsEmpty`
+- Do not compare against `RawImageData.Empty` by reference; use `IsEmpty`. `RawImageData.Empty` is now a property: recompile code that uses it, or it fails with `MissingFieldException`
+- WSQ files whose transform table does not have the filter lengths of the standard WSQ filter pair (9 and 7) are rejected with `WsqException`. NBIS may have decoded such files before
 
 ## Future Plans
 
